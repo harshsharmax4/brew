@@ -11,13 +11,13 @@ module Homebrew
     const :rebuild, Integer
     const :sha256, T.nilable(String)
 
-    sig { params(array: [String, String, Integer, T.nilable(String)]).returns(FormulaStub) }
-    def self.from_array(array)
+    sig { params(name: String, array: [String, Integer, T.nilable(String)]).returns(FormulaStub) }
+    def self.from_array(name, array)
       new(
-        name:        array[0],
-        pkg_version: PkgVersion.parse(array[1]),
-        rebuild:     array[2],
-        sha256:      array[3],
+        name:        name,
+        pkg_version: PkgVersion.parse(array[0]),
+        rebuild:     array[1],
+        sha256:      array[2],
       )
     end
   end
