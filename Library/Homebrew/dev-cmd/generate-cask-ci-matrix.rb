@@ -67,8 +67,8 @@ module Homebrew
         end
         raise UsageError, "Only one url can be specified" if pr_url&.count&.> 1
 
-        labels = if pr_url
-          pr = GitHub::API.open_rest(pr_url.first)
+        labels = if pr_url && (first_pr_url = pr_url.first)
+          pr = GitHub::API.open_rest(first_pr_url)
           pr.fetch("labels").map { |l| l.fetch("name") }
         else
           []
