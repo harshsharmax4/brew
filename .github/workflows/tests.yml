@@ -415,7 +415,7 @@ jobs:
 
       - name: Setup environment variables
         run: |
-          # Set enviroment variables to bypass `brew doctor` failures on Tier >=2 configurations
+          # Set environment variables to bypass `brew doctor` failures on Tier >=2 configurations
           if [[ "${MATRIX_NAME}" == "test-bot (Linux arm64)" ]]; then
             echo "HOMEBREW_ARM64_TESTING=1" >> "$GITHUB_ENV"
           elif [[ "${MATRIX_NAME}" == "test-bot (Linux Homebrew glibc)" ]]; then
