@@ -8,7 +8,7 @@ Run `brew completions link` after installing Homebrew to set up completion files
 
 ## Fuzzy Finding and History Search
 
-- **`fzf`** – General-purpose command-line fuzzy finder. After installation, run `"$(brew --prefix)/opt/fzf/install"` to enable key bindings and shell integration.
+- **`fzf`** – General-purpose command-line fuzzy finder. After installation, run `"$(brew --prefix)/opt/fzf/install"` to enable key bindings, completion, and shell integration.
 
 ```sh
 brew install fzf
@@ -61,7 +61,7 @@ brew install zoxide nnn
 Add to `~/.zshrc`:
 
 ```sh
-source "$(brew --prefix)/share/zoxide/zoxide.zsh"
+eval "$(zoxide init zsh)"
 ```
 
 To enable `nnn`'s `cd` function:
@@ -77,6 +77,18 @@ export NNN_PLUG='c:cd -'
 
 ```sh
 brew install tldr navi
+```
+
+Refresh the `tldr` cache so pages are available immediately:
+
+```sh
+tldr --update
+```
+
+To enable `navi`'s widget/key binding in zsh, add to `~/.zshrc`:
+
+```sh
+eval "$(navi widget zsh)"
 ```
 
 ## Python Utilities without Virtual Environments
@@ -100,5 +112,11 @@ This keeps global Python packages manageable without using a full virtual enviro
 brew install bat lsd
 ```
 
-After installing these tools, reload your shell or start a new session to take advantage of the enhancements.
+To activate them in zsh, add optional aliases to `~/.zshrc`:
 
+```sh
+alias cat="bat"
+alias ls="lsd"
+```
+
+After installing these tools, reload your shell or start a new session to take advantage of the enhancements.
