@@ -13,6 +13,7 @@ Features, usage and installation instructions are [summarised on the homepage](h
 ## More Documentation
 
 `brew help`, `man brew` or check [our documentation](https://docs.brew.sh/).
+See [Terminal Enhancements](docs/Terminal-Enhancements.md) for shell usability tips.
 
 ## Troubleshooting
 
