@@ -35,6 +35,7 @@ module Homebrew
         "Library",
         "Library/Application Scripts",
         "Library/Application Support",
+        "Library/Application Support/Caches",
         "Library/Application Support/CrashReporter",
         "Library/Application Support/com.apple.sharedfilelist/" \
         "com.apple.LSSharedFileList.ApplicationRecentDocuments",
@@ -53,11 +54,15 @@ module Homebrew
         "Library/Preferences",
         "Library/Preferences/ByHost",
         "Library/Saved Application State",
+        "Library/ScriptingAdditions",
+        "Library/ScriptingDefinitions",
+        "Library/Scripts",
         "Library/WebKit",
         "Music",
       ].freeze, T::Array[String])
 
       SYSTEM_DELETE_PATHS = T.let([
+        "/Library/Application Scripts",
         "/Library/Application Support",
         "/Library/Caches",
         "/Library/Frameworks",
@@ -69,6 +74,8 @@ module Homebrew
         "/Library/PrivilegedHelperTools",
         "/Library/Screen Savers",
         "/Library/ScriptingAdditions",
+        "/Library/ScriptingDefinitions",
+        "/Library/Scripts",
         "/Library/Services",
         "/Users/Shared",
         "/etc/newsyslog.d",

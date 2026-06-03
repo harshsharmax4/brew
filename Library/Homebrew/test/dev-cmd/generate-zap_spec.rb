@@ -9,6 +9,22 @@ RSpec.describe Homebrew::DevCmd::GenerateZap do
 
   it_behaves_like "parseable arguments"
 
+  describe "scan path configuration" do
+    it "includes scripting and Electron cache locations" do
+      expect(described_class::USER_TRASH_PATHS).to include(
+        "Library/Application Support/Caches",
+        "Library/ScriptingAdditions",
+        "Library/ScriptingDefinitions",
+        "Library/Scripts",
+      )
+      expect(described_class::SYSTEM_DELETE_PATHS).to include(
+        "/Library/Application Scripts",
+        "/Library/ScriptingDefinitions",
+        "/Library/Scripts",
+      )
+    end
+  end
+
   describe "#resolve_app_name_from_cask" do
     it "resolves app name from a cask with an app artifact" do
       app = instance_double(Cask::Artifact::App, target: Pathname.new("TestCask.app"))
