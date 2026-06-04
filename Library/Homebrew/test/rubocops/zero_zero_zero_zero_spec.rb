@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/zero_zero_zero_zero"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::ZeroZeroZeroZero do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::ZeroZeroZeroZero }
 
   it "reports no offenses when 0.0.0.0 is used inside test do blocks" do
     expect_no_offenses(<<~RUBY, "/homebrew-core/")

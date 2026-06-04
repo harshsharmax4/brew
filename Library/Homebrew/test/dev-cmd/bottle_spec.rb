@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "cmd/shared_examples/args_parse"
 require "dev-cmd/bottle"
 
 RSpec.describe Homebrew::DevCmd::Bottle do
+  let(:klass) { Homebrew::DevCmd::Bottle }
+
   def stub_hash(parameters)
     <<~EOS
       {
@@ -307,10 +309,60 @@ RSpec.describe Homebrew::DevCmd::Bottle do
         end
       EOS
     end
+
+    it "writes an all bottle JSON for matching platform bottles" do
+      core_tap.path.cd do
+        system "git", "-c", "init.defaultBranch=master", "init"
+        setup_test_formula "testball"
+        system "git", "add", "--all"
+        system "git", "commit", "-m", "testball 0.1"
+      end
+
+      mktmpdir.cd do
+        sha256 = "8f9aecd233463da6a4ea55f5f88fc5841718c013f3e2a7941350d6130f1dc149"
+        bottle_json_paths = ["arm64_big_sur", "big_sur"].map do |tag|
+          Pathname("testball--1.0.#{tag}.bottle.tar.gz").write("test")
+          Pathname("#{TEST_TMPDIR}/testball-1.0.#{tag}.bottle.json").tap do |path|
+            path.write stub_hash(
+              name:           "testball",
+              version:        "1.0",
+              path:           "#{core_tap.path}/Formula/testball.rb",
+              cellar:         "any_skip_relocation",
+              os:             tag,
+              filename:       "testball-1.0.#{tag}.bottle.tar.gz",
+              local_filename: "testball--1.0.#{tag}.bottle.tar.gz",
+              sha256:,
+            )
+          end
+        end
+
+        # RuboCop would align the `.and` with `.to_stdout` which is too floaty.
+        # rubocop:disable Layout/MultilineMethodCallIndentation
+        expect do
+          brew "bottle", "--merge", "--write", "--no-commit", *bottle_json_paths
+        end.to output(/sha256 cellar: :any_skip_relocation, all: "#{sha256}"/).to_stdout
+        .and not_to_output.to_stderr
+        .and be_a_success
+        # rubocop:enable Layout/MultilineMethodCallIndentation
+
+        all_bottle_hash = JSON.parse(Pathname("testball--1.0.all.bottle.json").read)
+        all_bottle_tag_hash = all_bottle_hash.dig("testball", "bottle", "tags", "all")
+
+        expect(all_bottle_hash.dig("testball", "bottle", "cellar")).to eq("any_skip_relocation")
+        expect(all_bottle_hash.dig("testball", "bottle", "tags").keys).to eq(["all"])
+        expect(all_bottle_tag_hash).to include(
+          "filename"       => "testball-1.0.all.bottle.tar.gz",
+          "local_filename" => "testball--1.0.all.bottle.tar.gz",
+          "sha256"         => sha256,
+        )
+        expect(all_bottle_tag_hash).not_to have_key("cellar")
+        expect(Pathname("testball--1.0.all.bottle.tar.gz")).to exist
+      end
+    end
   end
 
   describe "bottle_cmd" do
-    subject(:homebrew) { described_class.new(["foo"]) }
+    subject(:homebrew) { klass.new(["foo"]) }
 
     let(:hello_hash_big_sur) do
       JSON.parse stub_hash(

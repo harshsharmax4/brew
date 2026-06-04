@@ -1,11 +1,13 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "cmd/shared_examples/args_parse"
 require "dev-cmd/generate-zap"
 
 RSpec.describe Homebrew::DevCmd::GenerateZap do
-  subject(:generate_zap) { described_class.new(["test"]) }
+  subject(:generate_zap) { klass.new(["test"]) }
+
+  let(:klass) { Homebrew::DevCmd::GenerateZap }
 
   it_behaves_like "parseable arguments"
 

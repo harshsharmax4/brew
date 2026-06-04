@@ -229,7 +229,7 @@ esac
 ##### Next, define all other helper functions.
 #####
 
-source "${HOMEBREW_LIBRARY}/Homebrew/utils/helpers.sh"
+source "${HOMEBREW_LIBRARY}/Homebrew/utils.sh"
 
 check-run-command-as-root() {
   [[ "${EUID}" == 0 || "${UID}" == 0 ]] || return
@@ -238,6 +238,10 @@ check-run-command-as-root() {
   [[ -f /.dockerenv ]] && return
   [[ -f /run/.containerenv ]] && return
   [[ -f /proc/1/cgroup ]] && grep -E "azpl_job|actions_job|docker|garden|kubepods" -q /proc/1/cgroup && return
+
+  # `brew as-console-user` is run by root-owned MDM/Munki/Jamf workflows so it
+  # can immediately dispatch the requested Homebrew command as the console user.
+  [[ "${HOMEBREW_COMMAND}" == "as-console-user" ]] && return
 
   # `brew services` may need `sudo` for system-wide daemons.
   if [[ "${HOMEBREW_COMMAND}" == "services" ]]
@@ -926,6 +930,7 @@ case "${HOMEBREW_COMMAND}" in
   -v) HOMEBREW_COMMAND="--version" ;;
   lc) HOMEBREW_COMMAND="livecheck" ;;
   tc) HOMEBREW_COMMAND="typecheck" ;;
+  x) HOMEBREW_COMMAND="exec" ;;
 esac
 if [[ ("${HOMEBREW_COMMAND}" == "audit" || "${HOMEBREW_COMMAND}" == "lgtm" ||
       "${HOMEBREW_COMMAND}" == "style" || "${HOMEBREW_COMMAND}" == "tests") &&
@@ -1048,23 +1053,43 @@ EOS
   export HOMEBREW_DEV_CMD_RUN="1"
 fi
 
+# Enable features for developers and CI before they become the default for everyone.
+if [[ -n "${HOMEBREW_DEVELOPER}" ]]
+then
+  export HOMEBREW_ASK="1"
+  export HOMEBREW_BUNDLE_DESCRIBE="1"
+  export HOMEBREW_BUNDLE_JOBS="auto"
+  export HOMEBREW_BUNDLE_NO_SECRETS="1"
+  export HOMEBREW_UPGRADE_AUTO_UPDATES_CASKS="1"
+  export HOMEBREW_SANDBOX_LINUX="1"
+fi
+
+# Enable features for users who have run a devcmd before they become the default for everyone.
 if [[ -n "${HOMEBREW_DEVELOPER}" || -n "${HOMEBREW_DEV_CMD_RUN}" ]]
 then
-  # Always run with Sorbet for Homebrew developers or when a Homebrew developer command has been run.
+  # odeprecated: make default next release
+  export HOMEBREW_USE_INTERNAL_API="1"
+fi
+
+# Only enable runtime typechecking for commands where correctness matters more
+# than performance.
+if [[ "${HOMEBREW_COMMAND}" == "test" || "${HOMEBREW_COMMAND}" == "test-bot" ||
+      "${HOMEBREW_COMMAND}" == "tests" ]]
+then
   export HOMEBREW_SORBET_RUNTIME="1"
 fi
 
 # Provide a (temporary, undocumented) way to disable Sorbet globally if needed
-# to avoid reverting the above.
+# to override any earlier environment setting.
 if [[ -n "${HOMEBREW_NO_SORBET_RUNTIME}" ]]
 then
   unset HOMEBREW_SORBET_RUNTIME
 fi
 
-if [[ -f "${HOMEBREW_LIBRARY}/Homebrew/cmd/${HOMEBREW_COMMAND}.sh" ]]
+if [[ -z "${HOMEBREW_FORCE_RUBY_COMMAND:-}" && -f "${HOMEBREW_LIBRARY}/Homebrew/cmd/${HOMEBREW_COMMAND}.sh" ]]
 then
   HOMEBREW_BASH_COMMAND="${HOMEBREW_LIBRARY}/Homebrew/cmd/${HOMEBREW_COMMAND}.sh"
-elif [[ -f "${HOMEBREW_LIBRARY}/Homebrew/dev-cmd/${HOMEBREW_COMMAND}.sh" ]]
+elif [[ -z "${HOMEBREW_FORCE_RUBY_COMMAND:-}" && -f "${HOMEBREW_LIBRARY}/Homebrew/dev-cmd/${HOMEBREW_COMMAND}.sh" ]]
 then
   HOMEBREW_BASH_COMMAND="${HOMEBREW_LIBRARY}/Homebrew/dev-cmd/${HOMEBREW_COMMAND}.sh"
 fi

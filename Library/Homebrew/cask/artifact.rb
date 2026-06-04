@@ -2,11 +2,13 @@
 # frozen_string_literal: true
 
 require "cask/artifact/app"
+require "cask/artifact/appimage"
 require "cask/artifact/artifact" # generic 'artifact' stanza
 require "cask/artifact/audio_unit_plugin"
 require "cask/artifact/binary"
 require "cask/artifact/colorpicker"
 require "cask/artifact/dictionary"
+require "cask/artifact/install_steps"
 require "cask/artifact/font"
 require "cask/artifact/input_method"
 require "cask/artifact/installer"
@@ -54,6 +56,8 @@ module Cask
       ::Cask::Artifact::Vst3Plugin,
     ].freeze
 
-    LINUX_ONLY_ARTIFACTS = T.let([].freeze, T::Array[T.untyped])
+    LINUX_ONLY_ARTIFACTS = [
+      ::Cask::Artifact::AppImage,
+    ].freeze
   end
 end

@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "bundle"
@@ -6,12 +6,14 @@ require "bundle/skipper"
 require "bundle/tap"
 
 RSpec.describe Homebrew::Bundle::Tap do
+  let(:klass) { Homebrew::Bundle::Tap }
+
   describe "dumping" do
-    subject(:dumper) { described_class }
+    subject(:dumper) { klass }
 
     context "when there is no tap" do
       before do
-        described_class.reset!
+        klass.reset!
         allow(Tap).to receive(:select).and_return []
       end
 
@@ -23,7 +25,7 @@ RSpec.describe Homebrew::Bundle::Tap do
 
     context "with taps" do
       before do
-        described_class.reset!
+        klass.reset!
 
         bar = instance_double(Tap, name: "bitbucket/bar", custom_remote?: true,
                               remote: "https://bitbucket.org/bitbucket/bar.git")
@@ -56,41 +58,49 @@ RSpec.describe Homebrew::Bundle::Tap do
         EOS
         expect(dumper.dump).to eql(expected_output.chomp)
       end
+
+      it "dumps trusted taps with trusted true" do
+        allow(Homebrew::Trust).to receive(:trusted_entries).with(:tap).and_return(["bitbucket/bar"])
+
+        expect(dumper.dump).to include(
+          "tap \"bitbucket/bar\", \"https://bitbucket.org/bitbucket/bar.git\", trusted: true",
+        )
+      end
     end
   end
 
   describe "installing" do
     describe ".installed_taps" do
       before do
-        described_class.reset!
+        klass.reset!
       end
 
       it "calls Homebrew" do
-        expect { described_class.installed_taps }.not_to raise_error
+        expect { klass.installed_taps }.not_to raise_error
       end
     end
 
     context "when tap is installed" do
       before do
-        allow(described_class).to receive(:installed_taps).and_return(["homebrew/cask"])
+        allow(klass).to receive(:installed_taps).and_return(["homebrew/cask"])
       end
 
       it "skips" do
         expect(Homebrew::Bundle).not_to receive(:system)
-        expect(described_class.preinstall!("homebrew/cask")).to be(false)
+        expect(klass.preinstall!("homebrew/cask")).to be(false)
       end
     end
 
     context "when tap is not installed" do
       before do
-        allow(described_class).to receive(:installed_taps).and_return([])
+        allow(klass).to receive(:installed_taps).and_return([])
       end
 
       it "taps" do
         expect(Homebrew::Bundle).to receive(:system).with(HOMEBREW_BREW_FILE, "tap", "homebrew/cask",
                                                           verbose: false).and_return(true)
-        expect(described_class.preinstall!("homebrew/cask")).to be(true)
-        expect(described_class.install!("homebrew/cask")).to be(true)
+        expect(klass.preinstall!("homebrew/cask")).to be(true)
+        expect(klass.install!("homebrew/cask")).to be(true)
       end
 
       context "with clone target" do
@@ -98,16 +108,16 @@ RSpec.describe Homebrew::Bundle::Tap do
           expect(Homebrew::Bundle).to \
             receive(:system).with(HOMEBREW_BREW_FILE, "tap", "homebrew/cask", "clone_target_path",
                                   verbose: false).and_return(true)
-          expect(described_class.preinstall!("homebrew/cask", clone_target: "clone_target_path")).to be(true)
-          expect(described_class.install!("homebrew/cask", clone_target: "clone_target_path")).to be(true)
+          expect(klass.preinstall!("homebrew/cask", clone_target: "clone_target_path")).to be(true)
+          expect(klass.install!("homebrew/cask", clone_target: "clone_target_path")).to be(true)
         end
 
         it "fails" do
           expect(Homebrew::Bundle).to \
             receive(:system).with(HOMEBREW_BREW_FILE, "tap", "homebrew/cask", "clone_target_path",
                                   verbose: false).and_return(false)
-          expect(described_class.preinstall!("homebrew/cask", clone_target: "clone_target_path")).to be(true)
-          expect(described_class.install!("homebrew/cask", clone_target: "clone_target_path")).to be(false)
+          expect(klass.preinstall!("homebrew/cask", clone_target: "clone_target_path")).to be(true)
+          expect(klass.install!("homebrew/cask", clone_target: "clone_target_path")).to be(false)
         end
       end
     end

@@ -69,7 +69,7 @@ module Homebrew
         sorted_formulae.each do |f|
           verify_local_bottles
           if testing_portable_ruby?
-            portable_formula!(f)
+            portable_formula!(f, args:)
           else
             formula!(f, args:)
           end
@@ -216,7 +216,8 @@ module Homebrew
 
       sig { params(formula: Formula).void }
       def cleanup_bottle_etc_var(formula)
-        # Restore etc/var files from bottle so dependents can use them.
+        # Restore bottled `etc`/`var` through `Formula#install_etc_var`, keeping
+        # test-bot cleanup aligned with `InstallRenamed` config handling.
         formula.install_etc_var
       end
 
@@ -358,6 +359,108 @@ module Homebrew
       sig { params(args: Homebrew::Cmd::TestBotCmd::Args).void }
       def setup_bottle_sudo_purge!(args:); end
 
+      sig { params(dependency: Dependency, dependency_name: String).returns(T::Boolean) }
+      def dependency_name_match?(dependency, dependency_name)
+        return true if dependency.name == dependency_name
+        return false if Utils.tap_from_full_name(dependency.name).present?
+        return false if Utils.tap_from_full_name(dependency_name).present?
+
+        Utils.name_from_full_name(dependency.name) == Utils.name_from_full_name(dependency_name)
+      end
+
+      sig { params(formula: Formula, dependencies: T::Array[Dependency]).returns(T::Array[String]) }
+      def recursive_runtime_dependency_names(formula, dependencies)
+        Dependency.expand(formula, dependencies).map { |dependency| dependency.to_formula.full_name }.uniq
+      end
+
+      sig { params(formula: Formula).void }
+      def annotate_added_dependencies(formula)
+        return unless GitHub::Actions.env_set?
+        return if @added_formulae.include?(formula.name)
+        return if (git = self.git).nil?
+
+        direct_runtime_dependencies = formula.deps.reject do |dependency|
+          dependency.build? || dependency.optional? || dependency.test?
+        end
+
+        new_line = T.let(nil, T.nilable(Integer))
+        Utils.safe_popen_read(
+          git, "-C", repository, "diff", "--no-ext-diff", "--unified=0", "origin/HEAD", "HEAD", "--",
+          formula.path.relative_path_from(repository).to_s
+        ).each_line do |diff_line|
+          if (match = diff_line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/))
+            new_line = match[1]&.to_i
+            next
+          end
+
+          line = new_line
+          next if line.nil?
+
+          if diff_line.start_with?("+") && !diff_line.start_with?("+++")
+            dependency_name = diff_line[/^\+\s*depends_on\s+["']([^"']+)["']/, 1]
+            new_line = line + 1
+          elsif !diff_line.start_with?("-") || diff_line.start_with?("---")
+            new_line = line + 1
+            next
+          else
+            next
+          end
+          next if dependency_name.blank?
+
+          dependency = direct_runtime_dependencies.find do |runtime_dependency|
+            dependency_name_match?(runtime_dependency, dependency_name)
+          end
+          next if dependency.nil?
+
+          dependency_formula = dependency.to_formula
+          existing_runtime_dependency_names = recursive_runtime_dependency_names(
+            formula,
+            direct_runtime_dependencies.reject do |runtime_dependency|
+              dependency_name_match?(runtime_dependency, dependency.name)
+            end,
+          )
+          new_recursive_dependency_names =
+            (
+              [dependency_formula.full_name] +
+              recursive_runtime_dependency_names(
+                dependency_formula,
+                dependency_formula.runtime_dependencies(read_from_tab: false, undeclared: false),
+              )
+            ).uniq - existing_runtime_dependency_names
+          next if new_recursive_dependency_names.blank?
+
+          sizes = new_recursive_dependency_names.map do |formula_name|
+            installed_sizes = @dependency_impact_installed_sizes ||=
+              T.let({}, T.nilable(T::Hash[String, T.nilable(Integer)]))
+            next installed_sizes[formula_name] if installed_sizes.key?(formula_name)
+
+            installed_sizes[formula_name] =
+              if (bottle = Formulary.factory(formula_name).bottle_for_tag(Utils::Bottles.tag))
+                bottle.fetch_tab(quiet: true)
+                bottle.installed_size
+              end
+          rescue DownloadError, FormulaUnavailableError, Resource::BottleManifest::Error
+            nil
+          end
+          dependency_count = new_recursive_dependency_names.count
+          message = "Adding `#{dependency_name}` adds #{dependency_count} new recursive " \
+                    "#{Utils.pluralize("dependency", dependency_count)} " \
+                    "on #{Utils::Bottles.tag} (#{Formatter.disk_usage_readable(sizes.compact.sum)}"
+          unknown_size_count = sizes.count(&:nil?)
+          message << ", plus #{Utils.pluralize("unknown size", unknown_size_count, include_count: true)}" \
+            if unknown_size_count.positive?
+          puts GitHub::Actions::Annotation.new(
+            :warning,
+            "#{message}).",
+            file:  formula.path.to_s.delete_prefix("#{repository}/"),
+            line:,
+            title: "#{formula}: new dependency impact",
+          )
+        end
+      rescue => e
+        opoo "Failed to determine dependency impact for #{formula.full_name}: #{e}"
+      end
+
       sig { params(formula: Formula).void }
       def livecheck(formula)
         return unless formula.livecheck_defined?
@@ -433,6 +536,9 @@ module Homebrew
             return
           end
 
+          new_formula = @added_formulae.include?(formula_name)
+          annotate_added_dependencies(formula) unless new_formula
+
           test "brew", "deps", "--tree", "--prune", "--annotate", "--include-build", "--include-test",
                named_args: formula_name
 
@@ -451,7 +557,6 @@ module Homebrew
             return
           end
 
-          new_formula = @added_formulae.include?(formula_name)
           ignore_failures = !args.test_default_formula? && !bottled_on_current_version && !new_formula
 
           deps = []
@@ -649,8 +754,8 @@ module Homebrew
         end
       end
 
-      sig { params(formula_name: String).void }
-      def portable_formula!(formula_name)
+      sig { params(formula_name: String, args: Homebrew::Cmd::TestBotCmd::Args).void }
+      def portable_formula!(formula_name, args:)
         test_header(:Formulae, method: "portable_formula!(#{formula_name})")
 
         install_ca_certificates_if_needed
@@ -683,6 +788,66 @@ module Homebrew
         test "brew", "test", formula_name
         test "brew", "linkage", formula_name
         test "brew", "bottle", "--skip-relocation", "--json", "--no-rebuild", formula_name
+
+        # We only do full testing on `portable-ruby` itself.
+        return if formula_name != "portable-ruby"
+        return if args.dry_run?
+
+        bottle_file = bottle_glob(formula_name).first
+        if bottle_file.nil?
+          failed formula_name, "no bottle file found for portable-ruby validation"
+          return
+        end
+
+        filename = bottle_file.basename.to_s
+        _, tag_string, = Utils::Bottles.extname_tag_rebuild(filename)
+        if tag_string.blank?
+          failed formula_name, "could not parse bottle filename #{filename}"
+          return
+        end
+
+        pkg_version = filename.delete_prefix("portable-ruby--")
+                              .sub(/\.#{Regexp.escape(tag_string)}\.bottle.*\.tar\.gz\z/, "")
+        if pkg_version.empty?
+          failed formula_name, "could not parse portable-ruby version from #{filename}"
+          return
+        end
+
+        tag_symbol = tag_string.to_sym
+        bottle_tag = Utils::Bottles::Tag.from_symbol(tag_symbol)
+        sha256 = bottle_file.sha256
+        version = pkg_version.split("_").first.to_s
+
+        vendor_dir = HOMEBREW_LIBRARY_PATH/"vendor"
+        (vendor_dir/"portable-ruby-version").atomic_write("#{pkg_version}\n")
+        (HOMEBREW_LIBRARY_PATH/".ruby-version").atomic_write("#{version}\n")
+        os = bottle_tag.linux? ? "linux" : "darwin"
+        platform_file = vendor_dir/"portable-ruby-#{bottle_tag.standardized_arch}-#{os}"
+        platform_file.atomic_write("ruby_TAG=#{tag_symbol}\nruby_SHA=#{sha256}\n")
+
+        # Seed `HOMEBREW_CACHE` so `brew vendor-install ruby` finds the just-built
+        # bottle locally instead of trying to download it.
+        HOMEBREW_CACHE.mkpath
+        FileUtils.cp(bottle_file, HOMEBREW_CACHE/"portable-ruby-#{pkg_version}.#{tag_symbol}.bottle.tar.gz")
+
+        test "brew", "vendor-install", "ruby"
+
+        bundler_version = Utils::PortableRuby.sync_bundler_version!(pkg_version)
+        test "brew", "vendor-gems", "--no-commit", "--update=--ruby,--bundler=#{bundler_version}"
+        test "brew", "typecheck", "--update"
+
+        # Run the checks that gate a Homebrew/brew pull request.
+        test "brew", "style"
+        test "brew", "typecheck"
+        test "brew", "install-bundler-gems", "--groups=all"
+        test "brew", "vendor-gems", "--non-bundler-gems", "--no-commit"
+        test "brew", "tests", "--online", "--coverage"
+        test "brew", "tests", "--generic", "--coverage"
+        test "brew", "update-test"
+        test "brew", "update-test", "--to-tag"
+        test "brew", "update-test", "--commit=HEAD"
+        test "brew", "test-bot", "--only-formulae", "--only-json-tab", "--test-default-formula",
+             env: { "GITHUB_ACTIONS" => nil }
       end
 
       sig { params(formula_name: String).void }
@@ -691,11 +856,11 @@ module Homebrew
 
         test "brew", "uses",
              "--formula",
-             "--eval-all",
              "--include-build",
              "--include-optional",
              "--include-test",
-             formula_name
+             formula_name,
+             env: require_current_tap_trust_env
       end
 
       sig { returns(T::Boolean) }

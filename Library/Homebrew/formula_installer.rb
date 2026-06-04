@@ -319,6 +319,11 @@ class FormulaInstaller
       end
     end
 
+    # Run the formula-self forbidden checks before any source or bottle
+    # download is enqueued so a forbidden formula never triggers a fetch.
+    forbidden_tap_check(formula_only: true)
+    forbidden_formula_check(formula_only: true)
+
     if pour_bottle?
       # Needs to be done before expand_dependencies for compute_dependencies
       fetch_bottle_tab(enqueue: true)
@@ -522,6 +527,8 @@ class FormulaInstaller
   def build_bottle_postinstall
     etc_var_postinstall = Find.find(*ETC_VAR_DIRS.select(&:directory?)).to_a
     (etc_var_postinstall - @etc_var_preinstall).each do |file|
+      # Keep new `etc`/`var` files in `.bottle` so `Formula#install_etc_var`
+      # can restore them later with `InstallRenamed` config handling.
       Pathname.new(file).cp_path_sub(HOMEBREW_PREFIX, formula.bottle_prefix)
     end
   end
@@ -802,7 +809,14 @@ on_request: installed_on_request?, options:)
             "#{deps.map { Formatter.identifier(it) }.to_sentence}",
             truncate: false
       end
-      deps.each { install_dependency(it) }
+      bubblewrap_dependency_index = deps.index { |dep| dep.name == "bubblewrap" && dep.implicit? }
+      deps.each_with_index do |dep, index|
+        if formula.name == "bubblewrap" || (bubblewrap_dependency_index && index <= bubblewrap_dependency_index)
+          with_env(HOMEBREW_INSTALLING_BUBBLEWRAP: "1") { install_dependency(dep) }
+        else
+          install_dependency(dep)
+        end
+      end
     end
 
     @show_header = true if deps.length > 1
@@ -981,7 +995,12 @@ on_request: installed_on_request?, options:)
       end
     else
       formula.install_etc_var
-      post_install if formula.post_install_defined?
+      if formula.post_install_steps_defined?
+        formula.warn_on_post_install_steps_conflict if formula.post_install_steps_conflict? && !quiet?
+        formula.run_post_install_steps
+      elsif formula.post_install_defined?
+        post_install
+      end
     end
 
     keg.prepare_debug_symbols if debug_symbols?
@@ -1010,6 +1029,8 @@ on_request: installed_on_request?, options:)
 
     # let's reset Utils::Git.available? if we just installed git
     Utils::Git.clear_available_cache if formula.name == "git"
+
+    Sandbox.reset_state! if formula.name == "bubblewrap"
 
     # use installed ca-certificates when it's needed and available
     if formula.name == "ca-certificates" &&
@@ -1100,19 +1121,26 @@ on_request: installed_on_request?, options:)
     # 1. formulae can modify ENV, so we must ensure that each
     #    installation has a pristine ENV when it starts, forking now is
     #    the easiest way to do this
+    formula_path = formula.specified_path
     args = [
       "nice",
       *HOMEBREW_RUBY_EXEC_ARGS,
       "--",
       HOMEBREW_LIBRARY_PATH/"build.rb",
-      formula.specified_path,
+      formula_path,
     ].concat(build_argv)
 
+    Sandbox.ensure_sandbox_installed!
     if Sandbox.available?
       sandbox = Sandbox.new
+      sandbox.allow_read_if_exists path: formula_path
       formula.logs.mkpath
       sandbox.record_log(formula.logs/"build.sandbox.log")
-      sandbox.allow_write_path(Dir.home) if interactive?
+      if interactive?
+        sandbox.allow_write_path(Dir.home)
+      else
+        sandbox.deny_read_home
+      end
       sandbox.allow_write_temp_and_cache
       sandbox.allow_write_log(formula)
       sandbox.allow_cvs
@@ -1350,6 +1378,7 @@ on_request: installed_on_request?, options:)
 
     args << post_install_formula_path
 
+    Sandbox.ensure_sandbox_installed!
     if Sandbox.available?
       sandbox = Sandbox.new
       formula.logs.mkpath
@@ -1358,6 +1387,7 @@ on_request: installed_on_request?, options:)
       sandbox.allow_write_log(formula)
       sandbox.allow_write_xcode
       sandbox.deny_write_homebrew_repository
+      sandbox.deny_read_home
       sandbox.allow_write_cellar(formula)
       sandbox.deny_all_network unless formula.network_access_allowed?(:postinstall)
       Keg.keg_link_directories.each do |dir|
@@ -1416,7 +1446,7 @@ on_request: installed_on_request?, options:)
     if (bottle = formula.bottle) &&
        (manifest_resource = bottle.github_packages_manifest_resource) &&
        enqueue
-      download_queue.enqueue(manifest_resource)
+      download_queue.enqueue(manifest_resource) unless manifest_resource.downloaded_and_valid?
     else
       begin
         formula.fetch_bottle_tab(quiet: quiet)
@@ -1462,7 +1492,7 @@ on_request: installed_on_request?, options:)
     # to explicitly `brew install gh` without already having a version for bootstrapping.
     # We also skip bottle installs from local bottle paths, as these are done in CI
     # as part of the build lifecycle before attestations are produced.
-    check_attestation &&= Homebrew::Attestation.enabled? &&
+    check_attestation &&= Homebrew::EnvConfig.verify_attestations? &&
                           (formula.tap&.core_tap? || false) &&
                           formula.name != "gh"
     # Check attestation after download completes.
@@ -1631,8 +1661,8 @@ on_request: installed_on_request?, options:)
     EOS
   end
 
-  sig { void }
-  def forbidden_tap_check
+  sig { params(formula_only: T::Boolean).void }
+  def forbidden_tap_check(formula_only: false)
     return if Tap.allowed_taps.blank? && Tap.forbidden_taps.blank?
 
     owner = Homebrew::EnvConfig.forbidden_owner
@@ -1640,39 +1670,46 @@ on_request: installed_on_request?, options:)
       "\n#{contact}"
     end
 
-    unless ignore_deps?
-      compute_dependencies.each do |dep|
-        dep_tap = dep.tap
-        next if dep_tap.blank? || (dep_tap.allowed_by_env? && !dep_tap.forbidden_by_env?)
+    # Check the formula itself before its dependencies, since dependency
+    # resolution can trigger downloads via `compute_dependencies`.
+    unless only_deps?
+      formula_tap = formula.tap
+      if formula_tap.present? && (!formula_tap.allowed_by_env? || formula_tap.forbidden_by_env?)
+        formula_error_message = "The installation of #{formula.full_name} has the tap #{formula_tap}\n" \
+                                "but #{owner} "
+        unless formula_tap.allowed_by_env?
+          formula_error_message << "has not allowed this tap in `$HOMEBREW_ALLOWED_TAPS`"
+        end
+        formula_error_message << " and\n" if !formula_tap.allowed_by_env? && formula_tap.forbidden_by_env?
+        if formula_tap.forbidden_by_env?
+          formula_error_message << "has forbidden this tap in `$HOMEBREW_FORBIDDEN_TAPS`"
+        end
+        formula_error_message << ".#{owner_contact}"
 
-        error_message = "The installation of #{formula.name} has a dependency #{dep.name}\n" \
-                        "from the #{dep_tap} tap but #{owner} "
-        error_message << "has not allowed this tap in `$HOMEBREW_ALLOWED_TAPS`" unless dep_tap.allowed_by_env?
-        error_message << " and\n" if !dep_tap.allowed_by_env? && dep_tap.forbidden_by_env?
-        error_message << "has forbidden this tap in `$HOMEBREW_FORBIDDEN_TAPS`" if dep_tap.forbidden_by_env?
-        error_message << ".#{owner_contact}"
-
-        raise CannotInstallFormulaError, error_message
+        raise CannotInstallFormulaError, formula_error_message
       end
     end
 
-    return if only_deps?
+    return if formula_only
+    return if ignore_deps?
 
-    formula_tap = formula.tap
-    return if formula_tap.blank? || (formula_tap.allowed_by_env? && !formula_tap.forbidden_by_env?)
+    compute_dependencies.each do |dep|
+      dep_tap = dep.tap
+      next if dep_tap.blank? || (dep_tap.allowed_by_env? && !dep_tap.forbidden_by_env?)
 
-    error_message = "The installation of #{formula.full_name} has the tap #{formula_tap}\n" \
-                    "but #{owner} "
-    error_message << "has not allowed this tap in `$HOMEBREW_ALLOWED_TAPS`" unless formula_tap.allowed_by_env?
-    error_message << " and\n" if !formula_tap.allowed_by_env? && formula_tap.forbidden_by_env?
-    error_message << "has forbidden this tap in `$HOMEBREW_FORBIDDEN_TAPS`" if formula_tap.forbidden_by_env?
-    error_message << ".#{owner_contact}"
+      error_message = "The installation of #{formula.name} has a dependency #{dep.name}\n" \
+                      "from the #{dep_tap} tap but #{owner} "
+      error_message << "has not allowed this tap in `$HOMEBREW_ALLOWED_TAPS`" unless dep_tap.allowed_by_env?
+      error_message << " and\n" if !dep_tap.allowed_by_env? && dep_tap.forbidden_by_env?
+      error_message << "has forbidden this tap in `$HOMEBREW_FORBIDDEN_TAPS`" if dep_tap.forbidden_by_env?
+      error_message << ".#{owner_contact}"
 
-    raise CannotInstallFormulaError, error_message
+      raise CannotInstallFormulaError, error_message
+    end
   end
 
-  sig { void }
-  def forbidden_formula_check
+  sig { params(formula_only: T::Boolean).void }
+  def forbidden_formula_check(formula_only: false)
     forbidden_formulae = Set.new(Homebrew::EnvConfig.forbidden_formulae.to_s.split)
     return if forbidden_formulae.blank?
 
@@ -1681,39 +1718,40 @@ on_request: installed_on_request?, options:)
       "\n#{contact}"
     end
 
-    unless ignore_deps?
-      compute_dependencies.each do |dep|
-        dep_name = if forbidden_formulae.include?(dep.name)
-          dep.name
-        elsif dep.tap.present? &&
-              (dep_full_name = "#{dep.tap}/#{dep.name}") &&
-              forbidden_formulae.include?(dep_full_name)
-          dep_full_name
-        else
-          next
-        end
+    unless only_deps?
+      formula_name = if forbidden_formulae.include?(formula.name)
+        formula.name
+      elsif forbidden_formulae.include?(formula.full_name)
+        formula.full_name
+      end
 
+      if formula_name
         raise CannotInstallFormulaError, <<~EOS
-          The installation of #{formula.name} has a dependency #{dep_name}
-          but the #{dep_name} formula was forbidden by #{owner} in `$HOMEBREW_FORBIDDEN_FORMULAE`.#{owner_contact}
+          The installation of #{formula_name} was forbidden by #{owner}
+          in `$HOMEBREW_FORBIDDEN_FORMULAE`.#{owner_contact}
         EOS
       end
     end
 
-    return if only_deps?
+    return if formula_only
+    return if ignore_deps?
 
-    formula_name = if forbidden_formulae.include?(formula.name)
-      formula.name
-    elsif forbidden_formulae.include?(formula.full_name)
-      formula.full_name
-    else
-      return
+    compute_dependencies.each do |dep|
+      dep_name = if forbidden_formulae.include?(dep.name)
+        dep.name
+      elsif dep.tap.present? &&
+            (dep_full_name = "#{dep.tap}/#{dep.name}") &&
+            forbidden_formulae.include?(dep_full_name)
+        dep_full_name
+      else
+        next
+      end
+
+      raise CannotInstallFormulaError, <<~EOS
+        The installation of #{formula.name} has a dependency #{dep_name}
+        but the #{dep_name} formula was forbidden by #{owner} in `$HOMEBREW_FORBIDDEN_FORMULAE`.#{owner_contact}
+      EOS
     end
-
-    raise CannotInstallFormulaError, <<~EOS
-      The installation of #{formula_name} was forbidden by #{owner}
-      in `$HOMEBREW_FORBIDDEN_FORMULAE`.#{owner_contact}
-    EOS
   end
 
   private

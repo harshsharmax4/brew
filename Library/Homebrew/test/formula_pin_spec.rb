@@ -1,11 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "formula_pin"
 
 RSpec.describe FormulaPin do
-  subject(:formula_pin) { described_class.new(formula) }
+  subject(:formula_pin) { klass.new(formula) }
 
+  let(:klass) { FormulaPin }
   let(:name) { "double" }
   let(:formula) { instance_double(Formula, name:, rack: HOMEBREW_CELLAR/name) }
 

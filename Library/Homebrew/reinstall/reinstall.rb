@@ -119,6 +119,7 @@ module Homebrew
       def backup(keg)
         keg.unlink
         begin
+          FileUtils.rm_r(backup_path(keg)) if backup_path(keg).exist?
           keg.rename backup_path(keg)
         rescue Errno::EACCES, Errno::ENOTEMPTY
           odie <<~EOS

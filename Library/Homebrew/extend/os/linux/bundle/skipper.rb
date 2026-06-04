@@ -27,8 +27,18 @@ module OS
             true
           end
 
+          sig { params(entry: Homebrew::Bundle::Dsl::Entry).returns(T::Boolean) }
+          def requires_wsl?(entry)
+            entry.type == :winget && !OS.wsl?
+          end
+
           sig { params(entry: Homebrew::Bundle::Dsl::Entry, silent: T::Boolean).returns(T::Boolean) }
           def skip?(entry, silent: false)
+            if requires_wsl?(entry)
+              $stdout.puts Formatter.warning("Skipping #{entry.type} #{entry.name} (requires WSL)") unless silent
+              return true
+            end
+
             return super unless requires_macos?(entry)
 
             $stdout.puts Formatter.warning("Skipping #{entry.type} #{entry.name} (requires macOS)") unless silent

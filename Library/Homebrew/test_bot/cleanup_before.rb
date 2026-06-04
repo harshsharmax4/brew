@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require "trust"
+
 module Homebrew
   module TestBot
     class CleanupBefore < TestCleanup
@@ -17,6 +19,7 @@ module Homebrew
         if ENV["HOMEBREW_GITHUB_ACTIONS"] && !ENV["GITHUB_ACTIONS_HOMEBREW_SELF_HOSTED"]
           # minimally fix brew doctor failures (a full clean takes ~5m)
           cleanup_github_actions_hosted_runner
+          untap_untrusted_taps
           test "brew", "cleanup", "--prune-prefix"
         end
 
@@ -27,6 +30,14 @@ module Homebrew
 
       sig { void }
       def cleanup_github_actions_hosted_runner; end
+
+      sig { void }
+      def untap_untrusted_taps
+        taps_to_untap = Homebrew::Trust.untrusted_taps.reject { |untrusted_tap| untrusted_tap.name == tap&.name }
+        return if taps_to_untap.empty?
+
+        test "brew", "untap", *taps_to_untap.map(&:name)
+      end
     end
   end
 end

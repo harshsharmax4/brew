@@ -4,7 +4,9 @@
 require "diagnostic"
 
 RSpec.describe Homebrew::Diagnostic::Checks do
-  subject(:checks) { described_class.new }
+  subject(:checks) { klass.new }
+
+  let(:klass) { Homebrew::Diagnostic::Checks }
 
   specify "#check_for_unsupported_macos" do
     ENV.delete("HOMEBREW_DEVELOPER")

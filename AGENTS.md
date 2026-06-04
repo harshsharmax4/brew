@@ -10,6 +10,8 @@ When running commands in this repository, use `./bin/brew` (not a system `brew` 
 
 When running Ruby directly (e.g. `ruby -e ...`, `gem`, profiling tools), never use the system Ruby. Use `./bin/brew ruby -- <args>` to run Ruby scripts with Homebrew's vendored Ruby and libraries loaded. The system macOS Ruby is an incompatible older version.
 
+Do not use conventional commit prefixes such as `feat:`, `fix:`, `chore:`, `refactor:`, `perf:` or `ci:`; the `Commit Style` GitHub Actions workflow rejects them.
+
 ## Code Standards
 
 ### Required Before Each Commit
@@ -27,11 +29,12 @@ When running Ruby directly (e.g. `ruby -e ...`, `gem`, profiling tools), never u
 ### Development Flow
 
 - Write new code (using Sorbet `sig` type signatures and `typed: strict` for new files).
-- Write new tests (avoid more than one `:integration_test` per file for speed). Try `typed: true` as a baseline but revert to `typed: false` if there are not easily fixable errors.
+- Write new tests (use at most one `:integration_test` per command, make it a happy-path test and keep it as fast as possible; add another only for essential core functionality in essential non-developer commands). Try `typed: true` as a baseline but revert to `typed: false` if there are not easily fixable errors.
   Write fast tests by preferring a single `expect` per unit test and combine expectations in a single test when it is an integration test or has non-trivial `before` for test setup.
 - When adding or tightening tests, verify them with a red/green cycle using the exact `--only=file:line` target for the example you changed.
 - Formula classes created in specs may be frozen; avoid stubbing class methods on them with RSpec mocks and prefer instance-level stubs or test setup that does not require class-method stubbing.
 - Keep comments minimal; prefer self-documenting code through strings, variable names, etc. over more comments.
+- Aim to wrap human-written user-facing terminal output at around 80 characters; this does not apply to generated output or code.
 
 ## Repository Structure
 
@@ -57,4 +60,7 @@ When running Ruby directly (e.g. `ruby -e ...`, `gem`, profiling tools), never u
 7. Keep diffs as minimal as possible.
 8. Prefer shelling out via `HOMEBREW_BREW_FILE` instead of requiring `cmd/` or `dev-cmd` when composing brew commands.
 9. Inline new or existing methods as methods or local variables unless they are reused 2+ times or needed for unit tests.
-10. Keep `extend/os/*` prepends as thin as possible; put the `prepend` in the OS-specific `linux` or `macos` file rather than the shared `extend/os/*` loader with an inline `if`, and prefer putting substantive logic in shared code outside `extend/` when practical so it can be tested on all platforms instead of relying on `:needs_linux` or `:needs_macos` specs.
+10. Avoid `T.must`; prefer explicit nil checks or APIs that return non-nil values.
+11. Avoid `T.unsafe(self)` whenever possible; prefer `requires_ancestor` or similar typed module patterns.
+12. Keep `extend/os/*` prepends as thin as possible; put the `prepend` in the OS-specific `linux` or `macos` file rather than the shared `extend/os/*` loader with an inline `if`, and prefer putting substantive logic in shared code outside `extend/` when practical so it can be tested on all platforms instead of relying on `:needs_linux` or `:needs_macos` specs.
+13. When Bash logic mirrors Ruby logic, keep both implementations in sync and add two-way comments naming the matching Ruby and Bash locations; keep matching helper filenames aligned where practical.

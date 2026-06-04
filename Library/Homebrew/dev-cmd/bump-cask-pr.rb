@@ -62,10 +62,11 @@ module Homebrew
       def run
         # This will be run by `brew audit` or `brew style` later so run it first to
         # not start spamming during normal output.
-        gem_groups = []
+        gem_groups = ["ast"]
         gem_groups << "style" if !args.no_audit? || !args.no_style?
         gem_groups << "audit" unless args.no_audit?
-        Homebrew.install_bundler_gems!(groups: gem_groups) unless gem_groups.empty?
+        Homebrew.install_bundler_gems!(groups: gem_groups)
+        require "utils/ast"
 
         # As this command is simplifying user-run commands then let's just use a
         # user path, too.
@@ -131,27 +132,21 @@ module Homebrew
         check_throttle(cask, new_version:)
         check_pull_requests(cask, new_version:) unless args.write_only?
 
-        replacement_pairs ||= []
         branch_name = "bump-#{cask.token}"
         commit_message = nil
 
         sourcefile_path = cask.sourcefile_path
         raise "unexpected nil cask.sourcefile_path" unless sourcefile_path
 
-        old_contents = File.read(sourcefile_path)
+        old_contents = sourcefile_path.read
+        new_contents = old_contents
 
         if new_base_url
           commit_message ||= "#{cask.token}: update URL"
 
-          m = /^ +url "(.+?)"\n/m.match(old_contents)
-          odie "Could not find old URL in cask!" if m.nil?
-
-          old_base_url = m.captures.fetch(0)
-
-          replacement_pairs << [
-            /#{Regexp.escape(old_base_url)}/,
-            new_base_url.to_s,
-          ]
+          cask_ast = Utils::AST::CaskAST.new(new_contents)
+          cask_ast.replace_first_stanza_value(:url, new_base_url.to_s)
+          new_contents = cask_ast.process
         end
 
         if new_version.present?
@@ -173,21 +168,15 @@ module Homebrew
               commit_message += " (intel only)"
             end
           end
-          replacement_pairs = replace_version_and_checksum(cask, new_hash, new_version, replacement_pairs)
+          new_contents = replace_version_and_checksum(cask, new_hash, new_version, new_contents)
         end
-        # Now that we have all replacement pairs, we will replace them further down
 
         commit_message ||= "#{cask.token}: update checksum" if new_hash
 
         # We should have already thrown UsageError above if there's nothing to update
         raise "Expected to have a commit message" if commit_message.nil?
 
-        # Remove nested arrays where elements are identical
-        replacement_pairs = replacement_pairs.reject { |pair| pair[0] == pair[1] }.uniq.compact
-        Utils::Inreplace.inreplace_pairs(sourcefile_path,
-                                         replacement_pairs,
-                                         read_only_run: args.dry_run?,
-                                         silent:        args.quiet?)
+        sourcefile_path.atomic_write(new_contents) unless args.dry_run?
 
         audit_exceptions = []
         audit_exceptions << ["min_os", "rosetta", "signing"] if ENV["HOMEBREW_TEST_BOT_AUTOBUMP"].present?
@@ -294,27 +283,21 @@ module Homebrew
 
       sig {
         params(
-          cask:              Cask::Cask,
-          new_hash:          T.nilable(T.any(String, Symbol)),
-          new_version:       BumpVersionParser,
-          replacement_pairs: T::Array[[T.any(Regexp, String), T.any(Pathname, String)]],
-        ).returns(T::Array[[T.any(Regexp, String), T.any(Pathname, String)]])
+          cask:        Cask::Cask,
+          new_hash:    T.nilable(T.any(String, Symbol)),
+          new_version: BumpVersionParser,
+          contents:    String,
+        ).returns(String)
       }
-      def replace_version_and_checksum(cask, new_hash, new_version, replacement_pairs)
+      def replace_version_and_checksum(cask, new_hash, new_version, contents)
         cask_sourcefile_path = cask.sourcefile_path
         raise "unexpected nil cask.sourcefile_path" unless cask_sourcefile_path
 
+        old_cask = Cask::CaskLoader.load(cask_sourcefile_path)
         generate_system_options(cask, new_version).each do |os, arch|
-          SimulateSystem.with(os:, arch:) do
-            # Handle the cask being invalid for specific os/arch combinations
-            old_cask = begin
-              Cask::CaskLoader.load(cask_sourcefile_path)
-            rescue Cask::CaskInvalidError, Cask::CaskUnreadableError
-              raise unless cask.on_system_blocks_exist?
-            end
-            next if old_cask.nil?
-
-            # Skip archs excluded by the reloaded cask's `depends_on arch:`.
+          tag = Utils::Bottles::Tag.new(system: os, arch:)
+          old_cask.refresh_for_tag(tag) do
+            # Skip archs excluded by the cask's `depends_on arch:`.
             reloaded_archs = old_cask.depends_on.arch&.filter_map { |a| a[:type] }&.uniq
             next if reloaded_archs.present? && reloaded_archs.exclude?(arch)
 
@@ -324,26 +307,25 @@ module Homebrew
             bump_version = new_version.send(arch) || new_version.general
             next unless bump_version
 
-            old_version_regex = old_version.latest? ? ":latest" : %Q(["']#{Regexp.escape(old_version.to_s)}["'])
-            replacement_pairs << [/version\s+#{old_version_regex}/m,
-                                  "version #{bump_version.latest? ? ":latest" : %Q("#{bump_version}")}"]
+            contents = replace_cask_stanza_value(
+              contents, :version,
+              old_version.latest? ? :latest : old_version.to_s,
+              bump_version.latest? ? :latest : bump_version.to_s
+            )
 
-            # We are replacing our version here so we can get the new hash
-            tmp_contents = Utils::Inreplace.inreplace_pairs(cask_sourcefile_path,
-                                                            replacement_pairs.uniq.compact,
-                                                            read_only_run: true,
-                                                            silent:        true)
-
-            tmp_cask = Cask::CaskLoader::FromContentLoader.new(tmp_contents)
+            tmp_cask = Cask::CaskLoader::FromContentLoader.new(contents)
                                                           .load(config: nil)
             old_hash = tmp_cask.sha256
             if tmp_cask.version.latest? || new_hash == :no_check
               opoo "Ignoring specified `--sha256=` argument." if new_hash.is_a?(String)
-              replacement_pairs << [/"#{old_hash}"/, ":no_check"] if old_hash != :no_check
+              if old_hash != :no_check
+                contents = replace_cask_stanza_value(contents, :sha256, old_hash.to_s,
+                                                     :no_check)
+              end
             elsif old_hash == :no_check && new_hash != :no_check
-              replacement_pairs << [":no_check", "\"#{new_hash}\""] if new_hash.is_a?(String)
+              contents = replace_cask_stanza_value(contents, :sha256, :no_check, new_hash) if new_hash.is_a?(String)
             elsif new_hash && !cask.on_system_blocks_exist? && cask.languages.empty?
-              replacement_pairs << [old_hash.to_s, new_hash.to_s]
+              contents = replace_cask_stanza_value(contents, :sha256, old_hash.to_s, new_hash.to_s)
             elsif old_hash != :no_check
               opoo "Multiple checksum replacements required; ignoring specified `--sha256` argument." if new_hash
               languages = if cask.languages.empty?
@@ -352,7 +334,7 @@ module Homebrew
                 cask.languages
               end
               languages.each do |language|
-                new_cask        = Cask::CaskLoader.load(tmp_contents)
+                new_cask        = Cask::CaskLoader.load(contents)
                 next unless new_cask.url
 
                 new_cask.config = if language.blank?
@@ -364,14 +346,38 @@ module Homebrew
                 Utils::Tar.validate_file(download)
 
                 if new_cask.sha256.to_s != download.sha256
-                  replacement_pairs << [new_cask.sha256.to_s,
-                                        download.sha256]
+                  contents = replace_cask_stanza_value(contents, :sha256, new_cask.sha256.to_s, download.sha256)
                 end
               end
             end
           end
         end
-        replacement_pairs
+        contents
+      end
+
+      sig {
+        params(
+          contents:  String,
+          name:      Symbol,
+          old_value: T.any(Numeric, String, Symbol),
+          new_value: T.any(Numeric, String, Symbol),
+        ).returns(String)
+      }
+      def replace_cask_stanza_value(contents, name, old_value, new_value)
+        return contents if old_value == new_value
+
+        cask_ast = Utils::AST::CaskAST.new(contents)
+        replacement_count = cask_ast.replace_stanza_value(name, old_value, new_value)
+        if replacement_count.zero?
+          # Treat an already-applied replacement as a successful no-op so the
+          # per-(os, arch) loop in `replace_version_and_checksum` can yield the
+          # same general version more than once without raising.
+          return contents if cask_ast.replace_stanza_value(name, new_value, new_value).positive?
+
+          raise "Could not find '#{name}' stanza with value #{old_value.inspect}!"
+        end
+
+        cask_ast.process
       end
 
       sig { params(cask: Cask::Cask, new_version: BumpVersionParser).void }

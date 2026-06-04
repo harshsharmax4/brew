@@ -11,24 +11,18 @@ class Homebrew::DevCmd::WhichUpdate
 end
 
 class Homebrew::DevCmd::WhichUpdate::Args < Homebrew::CLI::Args
-  sig { returns(T::Boolean) }
-  def commit?; end
-
-  sig { returns(T::Boolean) }
-  def eval_all?; end
-
-  sig { returns(T::Boolean) }
-  def install_missing?; end
+  sig { returns(T.nilable(String)) }
+  def bottle_json_dir; end
 
   sig { returns(T.nilable(String)) }
-  def max_downloads; end
+  def pull_request; end
 
-  sig { returns(T::Boolean) }
-  def stats?; end
+  sig { returns(T.nilable(String)) }
+  def removed_formulae_file; end
+
+  sig { returns(T.nilable(String)) }
+  def repository; end
 
   sig { returns(T.nilable(String)) }
   def summary_file; end
-
-  sig { returns(T::Boolean) }
-  def update_existing?; end
 end

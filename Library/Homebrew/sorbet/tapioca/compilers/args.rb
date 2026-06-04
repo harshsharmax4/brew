@@ -64,7 +64,13 @@ module Tapioca
       sig { params(klass: RBI::Scope, parser: Homebrew::CLI::Parser).void }
       def create_args_methods(klass, parser)
         comma_array_methods = comma_arrays(parser)
-        args_table(parser).each do |method_name|
+        args_methods = args_table(parser)
+
+        # `CLI::Parser` adds `subcommand` dynamically during parsing for commands
+        # that define subcommands.
+        args_methods << :subcommand if parser.subcommands.present? && !args_methods.include?(:subcommand)
+
+        args_methods.each do |method_name|
           method_name_str = method_name.to_s
           next if GLOBAL_OPTIONS.include?(method_name_str)
 

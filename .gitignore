@@ -20,10 +20,11 @@
 /Library/Homebrew/test/fs_leak_log
 /Library/Homebrew/vendor/portable-ruby
 /Library/Homebrew/vendor/brew-rs/
-/Library/Homebrew/rust/brew-rs/target
+/Library/Homebrew/rust/brew-rs
 /Library/Taps
 /Library/PinnedTaps
 /Library/Homebrew/.byebug_history
+/Library/Homebrew/test/.npm/
 /Library/Homebrew/test/.rdbg_history
 
 # Ignore Bundler files
@@ -193,6 +194,8 @@
 !/.editorconfig
 !/.gitignore
 !/.irb_config
+!/.licenses
+!/.licenses/**
 !/.ruby-version
 !/.shellcheckrc
 !/.vale.ini

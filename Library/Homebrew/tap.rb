@@ -270,6 +270,36 @@ class Tap
     @config = nil
   end
 
+  sig { params(path: Pathname).returns(T.nilable(Pathname)) }
+  def worktree_source_tap_path_for(path:)
+    return unless (git_file = path/".git").file?
+    return unless (git_dir = git_file.read[/\Agitdir: (.+)\n?\z/, 1])
+
+    git_dir_path = Pathname(git_dir)
+    git_dir_path = path/git_dir_path unless git_dir_path.absolute?
+
+    # A linked worktree points at `<source>/.git/worktrees/<name>`, so use
+    # the matching source tap when it is already checked out there.
+    if git_dir_path.dirname.dirname.basename.to_s == ".git" && git_dir_path.dirname.basename.to_s == "worktrees"
+      source_path = git_dir_path.dirname.dirname.dirname
+      return source_path if path != HOMEBREW_REPOSITORY
+
+      candidate_source_tap_path = source_path/"Library/Taps/#{full_name.downcase}"
+      return candidate_source_tap_path if (candidate_source_tap_path/".git").exist?
+
+    end
+
+    Utils.popen_read("git", "-C", path, "worktree", "list", "--porcelain")
+         .each_line do |line|
+      next unless line.start_with?("worktree ")
+
+      candidate_source_tap_path = Pathname(line.delete_prefix("worktree ").chomp)/"Library/Taps/#{full_name.downcase}"
+      return candidate_source_tap_path if (candidate_source_tap_path/".git").exist?
+    end
+
+    nil
+  end
+
   sig { overridable.void }
   def ensure_installed!
     return if installed?
@@ -486,6 +516,9 @@ class Tap
     # ensure git is installed
     Utils::Git.ensure_installed!
 
+    use_worktree_source_tap = core_tap? || (core_cask_tap? && clone_target.nil? && !custom_remote)
+    worktree_source_tap_path = use_worktree_source_tap ? worktree_source_tap_path_for(path: HOMEBREW_REPOSITORY) : nil
+
     if installed?
       if requested_remote != remote # we are sure that clone_target is not nil and custom_remote is true here
         fix_remote_configuration(requested_remote:, quiet:)
@@ -500,7 +533,8 @@ class Tap
       args << "-q" if quiet
       path.cd { safe_system "git", *args }
       return
-    elsif (core_tap? || core_cask_tap?) && !Homebrew::EnvConfig.no_install_from_api? && !force
+    elsif (core_tap? || core_cask_tap?) && !Homebrew::EnvConfig.no_install_from_api? && !force &&
+          worktree_source_tap_path.blank?
       odie "Tapping #{name} is no longer typically necessary.\n" \
            "Add #{Formatter.option("--force")} if you are sure you need it for contributing to Homebrew."
     end
@@ -522,7 +556,15 @@ class Tap
     args << "--config" << "core.fsmonitor=false"
 
     begin
-      safe_system "git", *args
+      if worktree_source_tap_path
+        # Keep core and cask taps connected to the same local source checkout as brew.
+        worktree_args = ["-C", worktree_source_tap_path, "worktree", "add"]
+        worktree_args << "--quiet" if quiet
+        worktree_args += ["--detach", path, "HEAD"]
+        safe_system "git", *worktree_args
+      else
+        safe_system "git", *args
+      end
 
       if verify && !Homebrew::EnvConfig.developer? && !Readall.valid_tap?(self, aliases: true)
         raise "Cannot tap #{name}: invalid syntax in tap!"
@@ -659,7 +701,10 @@ class Tap
     require "utils/link"
     Utils::Link.unlink_manpages(path)
     Utils::Link.unlink_completions(path)
-    FileUtils.rm_r(path)
+    if (worktree_source_tap_path = worktree_source_tap_path_for(path:))
+      safe_system "git", "-C", worktree_source_tap_path, "worktree", "remove", "--force", path
+    end
+    FileUtils.rm_r(path) if path.exist?
     path.parent.rmdir_if_possible
     $stderr.puts "Untapped#{formatted_contents} (#{abv})."
 

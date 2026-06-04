@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "cask/installer"
 require "cask/reinstall"
 
 RSpec.describe Cask::Reinstall, :cask do
+  let(:klass) { Cask::Reinstall }
+
   it "displays the reinstallation progress" do
     caffeine = Cask::CaskLoader.load(cask_path("local-caffeine"))
 
@@ -22,7 +24,7 @@ RSpec.describe Cask::Reinstall, :cask do
     EOS
 
     expect do
-      described_class.reinstall_casks(Cask::CaskLoader.load("local-caffeine"))
+      klass.reinstall_casks(Cask::CaskLoader.load("local-caffeine"))
     end.to output(output).to_stdout
   end
 
@@ -45,7 +47,7 @@ RSpec.describe Cask::Reinstall, :cask do
     EOS
 
     expect do
-      described_class.reinstall_casks(Cask::CaskLoader.load("local-caffeine"), zap: true)
+      klass.reinstall_casks(Cask::CaskLoader.load("local-caffeine"), zap: true)
     end.to output(output).to_stdout
   end
 
@@ -54,7 +56,7 @@ RSpec.describe Cask::Reinstall, :cask do
 
     expect(Cask::CaskLoader.load(cask_path("local-transmission-zip"))).to be_installed
 
-    described_class.reinstall_casks(Cask::CaskLoader.load("local-transmission-zip"))
+    klass.reinstall_casks(Cask::CaskLoader.load("local-transmission-zip"))
     expect(Cask::CaskLoader.load(cask_path("local-transmission-zip"))).to be_installed
   end
 
@@ -67,23 +69,25 @@ RSpec.describe Cask::Reinstall, :cask do
 
     failing_installer = instance_double(Cask::Installer)
     allow(failing_installer).to receive(:prelude)
+    allow(failing_installer).to receive(:source_download_requires_pre_fetch?).and_return(false)
     allow(failing_installer).to receive(:enqueue_downloads)
     allow(failing_installer).to receive(:install).and_raise(Cask::CaskError.new("reinstall failed"))
 
     successful_installer = instance_double(Cask::Installer)
     allow(successful_installer).to receive(:prelude)
+    allow(successful_installer).to receive(:source_download_requires_pre_fetch?).and_return(false)
     allow(successful_installer).to receive(:enqueue_downloads)
 
     allow(Cask::Installer).to receive(:new).and_return(failing_installer, successful_installer)
 
     expect(successful_installer).to receive(:install)
-    expect { described_class.reinstall_casks(cask1, cask2) }.to raise_error(Cask::CaskError, "reinstall failed")
+    expect { klass.reinstall_casks(cask1, cask2) }.to raise_error(Cask::CaskError, "reinstall failed")
   end
 
   it "allows reinstalling a non installed Cask" do
     expect(Cask::CaskLoader.load(cask_path("local-transmission-zip"))).not_to be_installed
 
-    described_class.reinstall_casks(Cask::CaskLoader.load("local-transmission-zip"))
+    klass.reinstall_casks(Cask::CaskLoader.load("local-transmission-zip"))
     expect(Cask::CaskLoader.load(cask_path("local-transmission-zip"))).to be_installed
   end
 end

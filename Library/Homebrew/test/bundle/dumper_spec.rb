@@ -7,18 +7,22 @@ require "bundle/brew_services"
 require "cask"
 
 RSpec.describe Homebrew::Bundle::Dumper do
-  subject(:dumper) { described_class }
+  subject(:dumper) { klass }
+
+  let(:klass) { Homebrew::Bundle::Dumper }
 
   before do
     ENV["HOMEBREW_BUNDLE_FILE"] = ""
 
     allow(Homebrew::Bundle).to receive(:cask_installed?).and_return(true)
     allow(Homebrew::Bundle::MacAppStore).to receive(:package_manager_executable).and_return(nil)
+    allow(Homebrew::Bundle::Winget).to receive(:package_manager_executable).and_return(nil)
     allow(Homebrew::Bundle::VscodeExtension).to receive(:package_manager_executable).and_return(nil)
     Homebrew::Bundle::Brew.reset!
     Homebrew::Bundle::Tap.reset!
     Homebrew::Bundle::Cask.reset!
     Homebrew::Bundle::MacAppStore.reset!
+    Homebrew::Bundle::Winget.reset!
     Homebrew::Bundle::VscodeExtension.reset!
     Homebrew::Bundle::Go.reset!
     Homebrew::Bundle::Cargo.reset!
@@ -57,6 +61,8 @@ RSpec.describe Homebrew::Bundle::Dumper do
   end
 
   it "preserves the legacy extension dump order" do
+    allow(Homebrew::Bundle::Winget).to receive(:dump)
+      .and_return('winget "PowerToys", id: "XP89DCGQ3K6VLD", source: "msstore"')
     allow(Homebrew::Bundle::Go).to receive(:dump).and_return('go "github.com/charmbracelet/crush"')
     allow(Homebrew::Bundle::Cargo).to receive(:dump).and_return('cargo "ripgrep"')
     allow(Homebrew::Bundle::Uv).to receive(:dump).and_return('uv "mkdocs"')
@@ -64,12 +70,14 @@ RSpec.describe Homebrew::Bundle::Dumper do
 
     expect(dumper.build_brewfile(
              describe: false, no_restart: false, formulae: false, taps: false, casks: false,
-             extension_types: { mas: false, vscode: false, cargo: true, flatpak: true, go: true, uv: true }
+             extension_types: { mas: false, winget: true, vscode: false, cargo: true, flatpak: true, go: true,
+                                uv: true }
            )).to eql(<<~BREWFILE)
              go "github.com/charmbracelet/crush"
              cargo "ripgrep"
              uv "mkdocs"
              flatpak "org.gnome.Calculator"
+             winget "PowerToys", id: "XP89DCGQ3K6VLD", source: "msstore"
            BREWFILE
   end
 end

@@ -33,7 +33,7 @@ Or upgrade a specific formula with:
 
 To stop something from being updated/upgraded:
 
-    brew pin <formula>
+    brew pin <formula_or_cask>
 
 If you also do not want Homebrew to automatically learn about newer versions until you choose to, disable auto-updating entirely:
 
@@ -41,11 +41,13 @@ If you also do not want Homebrew to automatically learn about newer versions unt
 
 For the tradeoffs and alternatives, see [Locking installed formulae at specific versions](Versions.md#locking-installed-formulae-at-specific-versions).
 
-To allow that formulae to update again:
+To allow that package to update again:
 
-    brew unpin <formula>
+    brew unpin <formula_or_cask>
 
 Note that pinned, outdated formulae that another formula depends on need to be upgraded when required, as we do not allow formulae to be built against outdated versions. If this is not desired, see [Locking installed formulae at specific versions](Versions.md#locking-installed-formulae-at-specific-versions) instead.
+
+Pinned casks are skipped by `brew upgrade`, but an app’s own updater may still update it outside Homebrew.
 
 ## How do I uninstall Homebrew?
 
@@ -244,7 +246,7 @@ When software uses its built-in mechanisms to upgrade itself, it happens without
 
 There are a few ideas to fix this problem:
 
-* Try to prevent the software’s automated updates. It wouldn’t be a universal solution and may cause it to break. Most software on Homebrew Cask is closed-source, so we’d be guessing. This is also why pinning casks to a version isn’t available.
+* Try to prevent the software’s automated updates. `brew pin <cask>` can prevent Homebrew from upgrading a cask, but it does not disable an app’s own updater. Most software on Homebrew Cask is closed-source, so trying to control that for every app would be guesswork.
 * Try to extract the installed software’s version and compare it to the cask, deciding what to do at that time. It’d be a complicated solution that would break other parts of our methodology, such as using versions to interpolate `url` values (a definite win for maintainability). This solution also isn’t universal, as many software developers are inconsistent in their versioning schemes (and app bundles are meant to have two version strings) and it doesn’t work for all types of software we support.
 
 So we let software be. Anything installed with Homebrew Cask should behave the same as if it were installed manually. But since we also want to support software that doesn’t self-upgrade, we add [`auto_updates true`](https://github.com/Homebrew/homebrew-cask/blob/aa461148bbb5119af26b82cccf5003e2b4e50d95/Casks/a/alfred.rb#L18) to casks for software that does. These casks may still be skipped by `brew upgrade` unless you explicitly include them. You can also set `HOMEBREW_UPGRADE_AUTO_UPDATES_CASKS=1` so Homebrew will try to upgrade them automatically when it can detect that the version currently installed in the user’s `appdir` is older than the latest version in the tap. This will become the default behavior in Homebrew 5.2.0.

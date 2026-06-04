@@ -1,11 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "livecheck/strategy"
 
 RSpec.describe Homebrew::Livecheck::Strategy::GithubReleases do
-  subject(:github_releases) { described_class }
+  subject(:github_releases) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Strategy::GithubReleases }
   let(:github_urls) do
     {
       release_asset:     "https://github.com/abc/def/releases/download/1.2.3/ghi-1.2.3.tar.gz",
@@ -16,9 +17,7 @@ RSpec.describe Homebrew::Livecheck::Strategy::GithubReleases do
     }
   end
   let(:non_github_url) { "https://brew.sh/test" }
-
-  let(:regex) { github_releases::DEFAULT_REGEX }
-
+  let(:regex) { Homebrew::Livecheck::Strategy::GithubReleases::DEFAULT_REGEX }
   let(:generated) do
     {
       def:  {
@@ -33,7 +32,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::GithubReleases do
       },
     }
   end
-
   # For the sake of brevity, this is a limited subset of the information found
   # in release objects in a response from the GitHub API. Some of these objects
   # are somewhat representative of real world scenarios but others are
@@ -84,7 +82,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::GithubReleases do
     EOS
   end
   let(:json) { JSON.parse(content) }
-
   let(:matches) { ["1.2.3", "1.2.2"] }
 
   describe "::match?" do
@@ -212,7 +209,7 @@ RSpec.describe Homebrew::Livecheck::Strategy::GithubReleases do
 
     it "returns default match_data when url is blank" do
       expect(github_releases.find_versions(url: ""))
-        .to eq({ matches: {}, regex: github_releases::DEFAULT_REGEX, url: "" })
+        .to eq({ matches: {}, regex: Homebrew::Livecheck::Strategy::GithubReleases::DEFAULT_REGEX, url: "" })
     end
 
     it "returns default match_data when content is blank" do

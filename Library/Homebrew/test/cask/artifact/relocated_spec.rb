@@ -4,6 +4,8 @@
 require "cask/artifact/relocated"
 
 RSpec.describe Cask::Artifact::Relocated, :cask do
+  let(:klass) { Cask::Artifact::Relocated }
+
   let(:cask) do
     Cask::Cask.new("test-cask") do
       url "file://#{TEST_FIXTURE_DIR}/cask/caffeine.zip"
@@ -14,7 +16,7 @@ RSpec.describe Cask::Artifact::Relocated, :cask do
   end
 
   let(:command) { NeverSudoSystemCommand }
-  let(:artifact) { described_class.new(cask, "test_file.txt") }
+  let(:artifact) { klass.new(cask, "test_file.txt") }
 
   describe "#add_altname_metadata" do
     let(:file) { Pathname("/tmp/test_file.txt") }

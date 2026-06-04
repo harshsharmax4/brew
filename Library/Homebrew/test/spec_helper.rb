@@ -53,6 +53,7 @@ require "test/support/helper/files"
 require "test/support/helper/fixtures"
 require "test/support/helper/formula"
 require "test/support/helper/mktmpdir"
+require "test/support/helper/subcommand"
 
 require "test/support/helper/spec/shared_context/homebrew_cask" if OS.mac?
 require "test/support/helper/spec/shared_context/integration_test"
@@ -147,6 +148,7 @@ RSpec.configure do |config|
   config.include(Test::Helper::Fixtures)
   config.include(Test::Helper::Formula)
   config.include(Test::Helper::MkTmpDir)
+  config.include(Test::Helper::Subcommand)
 
   # Enable aggregate failures by default
   config.define_derived_metadata do |metadata|
@@ -203,28 +205,46 @@ RSpec.configure do |config|
     ENV["HOMEBREW_NO_INSTALL_FROM_API"] = "1"
   end
 
-  config.before(:each, :needs_svn) do
-    svn_shim = HOMEBREW_SHIMS_PATH/"shared/svn"
-    skip "Subversion is not installed." unless quiet_system svn_shim, "--version"
+  svn_path_dirs = nil
+  svn_skip_reason = nil
 
-    svn_shim_path = Pathname(Utils.popen_read(svn_shim, "--homebrew=print-path").chomp.presence)
+  config.before(:each, :needs_svn) do
+    skip svn_skip_reason if svn_skip_reason
+    if svn_path_dirs
+      ENV["PATH"] = PATH.new(ENV.fetch("PATH")).append(svn_path_dirs)
+      next
+    end
+
     svn_paths = PATH.new(ENV.fetch("PATH"))
-    svn_paths.prepend(svn_shim_path.dirname)
 
     if OS.mac?
       xcrun_svn = Utils.popen_read("xcrun", "-f", "svn")
       svn_paths.append(File.dirname(xcrun_svn)) if $CHILD_STATUS.success? && xcrun_svn.present?
     end
 
-    svn = which("svn", svn_paths)
-    skip "svn is not installed." unless svn
-
     svnadmin = which("svnadmin", svn_paths)
-    skip "svnadmin is not installed." unless svnadmin
+    unless svnadmin
+      svn_skip_reason = "svnadmin is not installed."
+      skip svn_skip_reason
+    end
 
-    ENV["PATH"] = PATH.new(ENV.fetch("PATH"))
-                      .append(svn.dirname)
-                      .append(svnadmin.dirname)
+    svn_shim = HOMEBREW_SHIMS_PATH/"shared/svn"
+    unless quiet_system svn_shim, "--version"
+      svn_skip_reason = "Subversion is not installed."
+      skip svn_skip_reason
+    end
+
+    svn_shim_path = Pathname(Utils.popen_read(svn_shim, "--homebrew=print-path").chomp.presence)
+    svn_paths.prepend(svn_shim_path.dirname)
+
+    svn = which("svn", svn_paths)
+    unless svn
+      svn_skip_reason = "svn is not installed."
+      skip svn_skip_reason
+    end
+
+    svn_path_dirs = [svn.dirname, svnadmin.dirname]
+    ENV["PATH"] = PATH.new(ENV.fetch("PATH")).append(svn_path_dirs)
   end
 
   config.before(:each, :needs_homebrew_curl) do
@@ -305,6 +325,8 @@ RSpec.configure do |config|
         *Keg.must_exist_subdirectories,
         HOMEBREW_LINKED_KEGS,
         HOMEBREW_PINNED_KEGS,
+        HOMEBREW_PINNED_CASKS,
+        Pathname(ENV.fetch("HOMEBREW_USER_CONFIG_HOME"))/"trust.json",
         HOMEBREW_PREFIX/"Caskroom",
         HOMEBREW_PREFIX/"Frameworks",
         HOMEBREW_LIBRARY/"Taps/homebrew/homebrew-cask",

@@ -26,15 +26,35 @@ module RuboCop
       # ```
       class PublicApiDocumentation < Base
         MSG = "`@api public` methods must have a descriptive YARD comment, not just the annotation."
+        MISSING_INCLUDE_MSG = "`%<file>s` contains `@api public` but is missing from `Style/Documentation.Include`."
+        EXTRA_INCLUDE_MSG = "`%<file>s` is included in `Style/Documentation.Include` but does not contain " \
+                            "`@api public`."
 
         sig { void }
         def on_new_investigation
           super
 
-          processed_source.comments.each do |comment|
+          comments = processed_source.comments
+          comments.each do |comment|
             next unless api_public_comment?(comment)
 
             add_offense(comment) unless descriptive_comment_preceding?(comment)
+          end
+
+          documentation_include = config.dig("Style/Documentation", "Include")
+          file_path = processed_source.file_path
+          return if documentation_include.nil? || file_path.nil?
+
+          api_public_comments = comments.select { |comment| api_public_comment?(comment) }
+          relative_path = file_path.sub(%r{.*/Library/Homebrew/}, "")
+          included = Array(documentation_include).include?(relative_path)
+          if api_public_comments.any? && !included
+            add_offense(api_public_comments.first, message: format(MISSING_INCLUDE_MSG, file: relative_path))
+          elsif api_public_comments.empty? && included
+            add_offense(
+              processed_source.ast || processed_source.buffer.source_range,
+              message: format(EXTRA_INCLUDE_MSG, file: relative_path),
+            )
           end
         end
 

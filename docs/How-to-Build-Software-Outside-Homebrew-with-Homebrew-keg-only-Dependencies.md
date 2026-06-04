@@ -69,3 +69,11 @@ You can get `pkg-config` to print the default search path with:
 ```sh
 pkg-config --variable pc_path pkg-config
 ```
+
+### Common Package Specification detection
+
+CMake 4.3 and newer can read [Common Package Specification](https://cps-org.github.io/cps/) `.cps` files from package prefixes. If the tool you are attempting to build uses CMake and a keg-only dependency ships `.cps` files, prepend that dependency's prefix to `CMAKE_PREFIX_PATH`:
+
+```sh
+export CMAKE_PREFIX_PATH="$(brew --prefix openssl):${CMAKE_PREFIX_PATH}"
+```

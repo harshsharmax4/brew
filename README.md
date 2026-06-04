@@ -51,7 +51,7 @@ Good luck!
 
 ## Security
 
-Please report security issues by filling in [the security advisory form](https://github.com/homebrew/brew/security/advisories/new).
+Please see [our security policy](https://github.com/Homebrew/.github/blob/HEAD/SECURITY.md) for how to report security issues and what is in scope.
 
 ## Who We Are
 
@@ -83,6 +83,6 @@ Secure password storage and syncing is provided by [1Password for Teams](https:/
 [![DNSimple](https://cdn.dnsimple.com/assets/resolving-with-us/logo-light.png)](https://dnsimple.com/resolving/homebrew#gh-light-mode-only)
 [![DNSimple](https://cdn.dnsimple.com/assets/resolving-with-us/logo-dark.png)](https://dnsimple.com/resolving/homebrew#gh-dark-mode-only)
 
-Homebrew is generously supported by [GitHub](https://github.com/github), [Joshua Baer](https://github.com/joshuabaer), [Custom Ink](https://github.com/customink), [Randy Reddig](https://github.com/ydnar), [Codecademy](https://github.com/Codecademy), [SAP](https://github.com/SAP), [b.well](https://github.com/icanbwell), [awppatel](https://github.com/awppatel), [EbbetG](https://github.com/EbbetG), [Workbrew](https://github.com/Workbrew) and many other users and organisations via [GitHub Sponsors](https://github.com/sponsors/Homebrew).
+Homebrew is generously supported by [Joshua Baer](https://github.com/joshuabaer), [Randy Reddig](https://github.com/ydnar), [Codecademy](https://github.com/Codecademy), [b.well](https://github.com/icanbwell), [Workbrew](https://github.com/Workbrew), [GitHub](https://github.com/github), [Custom Ink](https://github.com/customink), [SAP](https://github.com/SAP), [ZachryWilsn](https://github.com/ZachryWilsn), [mikadelbert](https://github.com/mikadelbert) and many other users and organisations via [GitHub Sponsors](https://github.com/sponsors/Homebrew).
 
 [![GitHub](https://github.com/github.png?size=64)](https://github.com/github)

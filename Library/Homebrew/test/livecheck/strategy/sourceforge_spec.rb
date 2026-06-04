@@ -4,8 +4,9 @@
 require "livecheck/strategy"
 
 RSpec.describe Homebrew::Livecheck::Strategy::Sourceforge do
-  subject(:sourceforge) { described_class }
+  subject(:sourceforge) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Strategy::Sourceforge }
   let(:sourceforge_urls) do
     {
       typical:       "https://downloads.sourceforge.net/project/abc/def-1.2.3.tar.gz",
@@ -14,7 +15,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Sourceforge do
     }
   end
   let(:non_sourceforge_url) { "https://brew.sh/test" }
-
   let(:generated) do
     {
       typical: {
@@ -26,7 +26,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Sourceforge do
       },
     }
   end
-
   let(:content) do
     <<~EOS
       <?xml version="1.0" encoding="utf-8"?>
@@ -52,7 +51,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Sourceforge do
       </rss>
     EOS
   end
-
   let(:matches) { ["1.2.3"] }
 
   describe "::match?" do

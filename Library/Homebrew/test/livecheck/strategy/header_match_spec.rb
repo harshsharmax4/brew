@@ -1,14 +1,14 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "livecheck/strategy"
 
 RSpec.describe Homebrew::Livecheck::Strategy::HeaderMatch do
-  subject(:header_match) { described_class }
+  subject(:header_match) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Strategy::HeaderMatch }
   let(:http_url) { "https://brew.sh/blog/" }
   let(:non_http_url) { "ftp://brew.sh/" }
-
   let(:regexes) do
     {
       archive: /filename=brew[._-]v?(\d+(?:\.\d+)+)\.t/i,
@@ -16,7 +16,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::HeaderMatch do
       loose:   /v?(\d+(?:\.\d+)+)/i,
     }
   end
-
   let(:headers) do
     headers = {
       content_disposition: {
@@ -40,7 +39,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::HeaderMatch do
 
     headers
   end
-
   let(:matches) do
     matches = {
       content_disposition: ["1.2.3"],

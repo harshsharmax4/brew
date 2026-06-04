@@ -18,6 +18,15 @@ module OS
         def runner_os_title_with_arch
           "#{runner_os_title} #{::Hardware::CPU.arch}"
         end
+
+        sig { returns(T::Boolean) }
+        def configure_sandbox!
+          require "sandbox"
+          ::Sandbox.configure!
+          ::Sandbox.available?
+        rescue ::ErrorDuringExecution
+          false
+        end
       end
 
       module TestFormulae

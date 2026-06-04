@@ -7,6 +7,8 @@ cask "with-conditional-caveats" do
   url "file://#{TEST_FIXTURE_DIR}/cask/caffeine.zip"
   homepage "https://brew.sh/"
 
+  depends_on macos: :catalina
+
   app "Caffeine.app"
 
   # a do block may print and use a DSL

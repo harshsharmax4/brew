@@ -45,6 +45,7 @@ module Homebrew
                             "Useful for repairing bottle uploads that previously failed."
         switch "--retain-bottle-dir",
                description: "Does not clean up the tmp directory for the bottle so it can be used later."
+        # odeprecated: replace with `HOMEBREW_GIT_COMMITTER_NAME` and `HOMEBREW_GIT_COMMITTER_EMAIL`.
         flag   "--committer=",
                description: "Specify a committer name and email in `git`'s standard author format."
         flag   "--message=",
@@ -164,7 +165,6 @@ module Homebrew
               upload_args << "--dry-run" if args.dry_run?
               upload_args << "--keep-old" if args.keep_old?
               upload_args << "--warn-on-upload-failure" if args.warn_on_upload_failure?
-              upload_args << "--committer=#{args.committer}" if args.committer
               upload_args << "--root-url=#{args.root_url}" if args.root_url
               upload_args << "--root-url-using=#{args.root_url_using}" if args.root_url_using
               safe_system HOMEBREW_BREW_FILE, *upload_args

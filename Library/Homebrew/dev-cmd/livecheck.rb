@@ -14,14 +14,19 @@ module Homebrew
           Check for newer versions of formulae and/or casks from upstream.
           If no formula or cask argument is passed, the list of formulae and
           casks to check is taken from `$HOMEBREW_LIVECHECK_WATCHLIST` or
-          `~/.homebrew/livecheck_watchlist.txt`.
+          `${XDG_CONFIG_HOME}/homebrew/livecheck_watchlist.txt` if
+          `$XDG_CONFIG_HOME` is set or `~/.homebrew/livecheck_watchlist.txt`
+          otherwise.
         EOS
         switch "--full-name",
                description: "Print formulae and casks with fully-qualified names."
         flag   "--tap=",
                description: "Check formulae and casks within the given tap, specified as <user>`/`<repo>."
+        # odeprecated: remove in a future release.
         switch "--eval-all",
-               description: "Evaluate all available formulae and casks, whether installed or not, to check them."
+               description: "Evaluate all available formulae and casks, whether installed or not, to check them.",
+               env:         :eval_all,
+               hidden:      true
         switch "--installed",
                description: "Check formulae and casks that are currently installed."
         switch "--newer-only",
@@ -54,6 +59,7 @@ module Homebrew
         Homebrew.install_bundler_gems!(groups: ["livecheck"])
 
         eval_all = args.eval_all?
+        eval_all ||= args.no_named? && Homebrew::EnvConfig.tap_trust_configured?
 
         if args.debug? && args.verbose?
           puts args
@@ -96,7 +102,8 @@ module Homebrew
               end
             else
               raise UsageError,
-                    "`brew livecheck` with no arguments needs a watchlist file to be present or `--eval-all` passed!"
+                    "`brew livecheck` with no arguments needs a watchlist file, " \
+                    "`HOMEBREW_REQUIRE_TAP_TRUST=1` or `HOMEBREW_NO_REQUIRE_TAP_TRUST=1` set!"
             end
           end,
           T::Array[T.any(Formula, Cask::Cask)],

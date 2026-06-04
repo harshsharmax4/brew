@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/lines"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::LibiconvCheck do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::LibiconvCheck }
 
   context "when auditing libiconv dependencies in homebrew/core" do
     it "reports an offense when a formula depends on `libiconv`" do

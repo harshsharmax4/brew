@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/components_redundancy"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::ComponentsRedundancy do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::ComponentsRedundancy }
 
   context "when auditing formula components" do
     it "reports an offense if `url` is outside `stable` block" do

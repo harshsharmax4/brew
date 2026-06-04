@@ -4,15 +4,16 @@
 require "sandbox"
 
 RSpec.describe Sandbox, :needs_macos do
-  define_negated_matcher :not_matching, :matching
+  subject(:sandbox) { klass.new }
 
-  subject(:sandbox) { described_class.new }
-
+  let(:klass) { Sandbox }
   let(:dir) { mktmpdir }
   let(:file) { dir/"foo" }
 
+  define_negated_matcher :not_matching, :matching
+
   before do
-    skip "Sandbox not implemented." unless described_class.available?
+    skip "Sandbox not implemented." unless klass.available?
   end
 
   specify "#allow_write" do
@@ -20,50 +21,6 @@ RSpec.describe Sandbox, :needs_macos do
     sandbox.run "touch", file
 
     expect(file).to exist
-  end
-
-  describe "#path_filter" do
-    ["'", '"', "(", ")", "\n", "\\"].each do |char|
-      it "fails if the path contains #{char}" do
-        expect do
-          sandbox.path_filter("foo#{char}bar", :subpath)
-        end.to raise_error(ArgumentError)
-      end
-    end
-  end
-
-  describe "#allow_write_cellar" do
-    it "fails when the formula has a name including )" do
-      f = formula do
-        url "https://brew.sh/foo-1.0.tar.gz"
-        version "1.0"
-
-        def initialize(*, **)
-          super
-          @name = "foo)bar"
-        end
-      end
-
-      expect do
-        sandbox.allow_write_cellar f
-      end.to raise_error(ArgumentError)
-    end
-
-    it "fails when the formula has a name including \"" do
-      f = formula do
-        url "https://brew.sh/foo-1.0.tar.gz"
-        version "1.0"
-
-        def initialize(*, **)
-          super
-          @name = "foo\"bar"
-        end
-      end
-
-      expect do
-        sandbox.allow_write_cellar f
-      end.to raise_error(ArgumentError)
-    end
   end
 
   describe "#run" do
@@ -84,6 +41,15 @@ RSpec.describe Sandbox, :needs_macos do
       expect { sandbox.run "false" }
         .to raise_error(ErrorDuringExecution)
         .and output(/foo/).to_stdout
+    end
+
+    it "does not raise getcwd EPERM when the parent CWD is sandbox-denied" do
+      mktmpdir do |denied|
+        sandbox.deny_read_path(denied)
+        Dir.chdir(denied) do
+          expect { sandbox.run "/bin/pwd" }.not_to raise_error
+        end
+      end
     end
 
     it "ignores bogus Python error" do

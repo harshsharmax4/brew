@@ -82,8 +82,10 @@ class AbstractFileDownloadStrategy < AbstractDownloadStrategy
   def parse_basename(url, search_query: true)
     components = { path: T.let([], T::Array[String]), query: T.let([], T::Array[String]) }
 
+    file_url = T.let(false, T::Boolean)
     if url.match?(URI::RFC2396_PARSER.make_regexp)
       uri = URI(url)
+      file_url = uri.scheme == "file"
 
       if (uri_query = uri.query.presence)
         URI.decode_www_form(uri_query).each do |key, param|
@@ -109,9 +111,13 @@ class AbstractFileDownloadStrategy < AbstractDownloadStrategy
     # extensions (e.g. tar.gz).
     # Given a URL like https://example.com/download.php?file=foo-1.0.tar.gz
     # the basename we want is "foo-1.0.tar.gz", not "download.php".
-    [*components[:path], *components[:query]].reverse_each do |path|
-      path = Pathname(path)
-      return path.basename.to_s if path.extname.present?
+    # Skipped for file:// URLs since their paths can contain ancestor
+    # directories with dots (e.g. "github.com") that aren't real extensions.
+    unless file_url
+      [*components[:path], *components[:query]].reverse_each do |path|
+        path = Pathname(path)
+        return path.basename.to_s if path.extname.present?
+      end
     end
 
     filename = components[:path].last

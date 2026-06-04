@@ -4,6 +4,8 @@
 require "livecheck/livecheck_version"
 
 RSpec.describe Homebrew::Livecheck::LivecheckVersion do
+  let(:klass) { Homebrew::Livecheck::LivecheckVersion }
+
   let(:formula) { instance_double(Formula) }
   let(:cask) { instance_double(Cask::Cask) }
   let(:resource) { instance_double(Resource) }
@@ -19,19 +21,19 @@ RSpec.describe Homebrew::Livecheck::LivecheckVersion do
   end
 
   specify "::create" do
-    expect(described_class.create(formula, Version.new("1.1.6")).versions).to eq ["1.1.6"]
-    expect(described_class.create(formula, Version.new("2.19.0,1.8.0")).versions).to eq ["2.19.0,1.8.0"]
-    expect(described_class.create(formula, Version.new("0.17.0,20210111183933,226")).versions)
+    expect(klass.create(formula, Version.new("1.1.6")).versions).to eq ["1.1.6"]
+    expect(klass.create(formula, Version.new("2.19.0,1.8.0")).versions).to eq ["2.19.0,1.8.0"]
+    expect(klass.create(formula, Version.new("0.17.0,20210111183933,226")).versions)
       .to eq ["0.17.0,20210111183933,226"]
 
-    expect(described_class.create(cask, Version.new("1.1.6")).versions).to eq ["1.1.6"]
-    expect(described_class.create(cask, Version.new("2.19.0,1.8.0")).versions).to eq ["2.19.0", "1.8.0"]
-    expect(described_class.create(cask, Version.new("0.17.0,20210111183933,226")).versions)
+    expect(klass.create(cask, Version.new("1.1.6")).versions).to eq ["1.1.6"]
+    expect(klass.create(cask, Version.new("2.19.0,1.8.0")).versions).to eq ["2.19.0", "1.8.0"]
+    expect(klass.create(cask, Version.new("0.17.0,20210111183933,226")).versions)
       .to eq ["0.17.0", "20210111183933", "226"]
 
-    expect(described_class.create(resource, Version.new("1.1.6")).versions).to eq ["1.1.6"]
-    expect(described_class.create(resource, Version.new("2.19.0,1.8.0")).versions).to eq ["2.19.0,1.8.0"]
-    expect(described_class.create(resource, Version.new("0.17.0,20210111183933,226")).versions)
+    expect(klass.create(resource, Version.new("1.1.6")).versions).to eq ["1.1.6"]
+    expect(klass.create(resource, Version.new("2.19.0,1.8.0")).versions).to eq ["2.19.0,1.8.0"]
+    expect(klass.create(resource, Version.new("0.17.0,20210111183933,226")).versions)
       .to eq ["0.17.0,20210111183933,226"]
   end
 end

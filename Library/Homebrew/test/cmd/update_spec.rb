@@ -26,11 +26,19 @@ RSpec.describe Homebrew::Cmd::Update do
     end
   end
 
+  def setup_update_utils
+    (test_root/"Library/Homebrew/utils").mkpath
+    FileUtils.ln_s repository_root/"Library/Homebrew/utils.sh", test_root/"Library/Homebrew/utils.sh"
+    %w[api executables formatter lock tty].each do |name|
+      FileUtils.ln_s repository_root/"Library/Homebrew/utils/#{name}.sh",
+                     test_root/"Library/Homebrew/utils/#{name}.sh"
+    end
+  end
+
   it "passes all arguments through to delegated upgrades" do
     args_file = test_root/"brew-args.txt"
     brew_wrapper = test_root/"brew-wrapper"
-    (test_root/"Library/Homebrew/utils").mkpath
-    FileUtils.ln_s repository_root/"Library/Homebrew/utils/lock.sh", test_root/"Library/Homebrew/utils/lock.sh"
+    setup_update_utils
     brew_wrapper.write <<~SH
       #!/bin/bash
       printf '%s\n' "$@" > "#{args_file}"
@@ -58,8 +66,7 @@ RSpec.describe Homebrew::Cmd::Update do
 
   it "passes `--auto-update` through to `update-report`" do
     args_file = test_root/"brew-args.txt"
-    (test_root/"Library/Homebrew/utils").mkpath
-    FileUtils.ln_s repository_root/"Library/Homebrew/utils/lock.sh", test_root/"Library/Homebrew/utils/lock.sh"
+    setup_update_utils
     (test_root/"cache").mkpath
     (test_root/"repository").mkpath
 
@@ -101,8 +108,7 @@ RSpec.describe Homebrew::Cmd::Update do
   it "preserves `update-report` arguments and exit status with the Rust frontend enabled" do
     args_file = test_root/"brew-args.txt"
     brew_wrapper = test_root/"brew-wrapper"
-    (test_root/"Library/Homebrew/utils").mkpath
-    FileUtils.ln_s repository_root/"Library/Homebrew/utils/lock.sh", test_root/"Library/Homebrew/utils/lock.sh"
+    setup_update_utils
     (test_root/"cache").mkpath
     (test_root/"repository").mkpath
     brew_wrapper.write <<~SH
@@ -114,7 +120,7 @@ RSpec.describe Homebrew::Cmd::Update do
 
     _stdout, stderr, status = run_update_shell(
       <<~SH,
-        source "#{repository_root}/Library/Homebrew/utils/helpers.sh"
+        source "#{repository_root}/Library/Homebrew/utils.sh"
         source "#{update_script}"
         fetch_api_file() { :; }
         git() {

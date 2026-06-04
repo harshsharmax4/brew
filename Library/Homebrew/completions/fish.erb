@@ -3,7 +3,9 @@
 #
 # - For changes to a command under `COMMANDS` or `DEVELOPER COMMANDS` sections):
 #   - Find the source file in `Library/Homebrew/[dev-]cmd/<command>.{rb,sh}`.
-#   - For `.rb` files, edit the `cmd_args` block.
+#   - For `.rb` files, edit the `cmd_args` block. For subcommand metadata,
+#     edit `Library/Homebrew/<command>/subcommand.rb` and
+#     `Library/Homebrew/<command>/subcommand/*.rb` if they exist.
 #   - For `.sh` files, edit the top comment, being sure to use the line prefix
 #     `#:` for the comments to be recognized as documentation. If in doubt,
 #     compare with already documented commands.
@@ -36,6 +38,14 @@ function __fish_brew_args -d "Returns a list of all arguments given to brew"
     end
 end
 
+function __fish_brew_expand_alias -a cmd -d "Expands a Homebrew command alias"
+    switch $cmd
+<%= aliases.join("\n") + "\n" %>
+        case '*'
+            echo $cmd
+    end
+end
+
 function __fish_brew_opts -d "Only arguments starting with a dash (options)"
     string match --all -- '-*' (__fish_brew_args)
 end
@@ -50,11 +60,12 @@ end
 function __fish_brew_command -d "Helps matching the first argument of brew"
     set args (__fish_brew_args)
     set -q args[1]; or return 1
+    set -l cmd (__fish_brew_expand_alias $args[1])
 
     if count $argv
-        contains -- $args[1] $argv
+        contains -- $cmd $argv
     else
-        echo $args[1]
+        echo $cmd
     end
 end
 
@@ -145,11 +156,16 @@ function __fish_brew_suggest_taps_installed -d "List all available taps"
     | string replace (brew --repo)/Library/Taps/ ""
 end
 
-function __fish_brew_suggest_commands -d "Lists all commands names, including aliases"
+function __fish_brew_suggest_commands -d "Lists all command names"
+    set -l commands
     if test -f (brew --cache)/all_commands_list.txt
-        cat (brew --cache)/all_commands_list.txt
+        set commands (cat (brew --cache)/all_commands_list.txt)
     else
-        cat (brew --repo)/completions/internal_commands_list.txt
+        set commands (cat (brew --repo)/completions/internal_commands_list.txt)
+    end
+    for command in $commands
+        set -l expanded_command (__fish_brew_expand_alias $command)
+        test "$expanded_command" = "$command"; and echo $command
     end
 end
 

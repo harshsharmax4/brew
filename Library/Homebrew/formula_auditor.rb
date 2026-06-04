@@ -883,11 +883,11 @@ module Homebrew
 
       throttle_rate = formula.livecheck.throttle
       throttle_days = formula.livecheck.throttle_days
-      if (!throttle_rate.nil? || !throttle_days.nil?) &&
+      if throttle_days.nil? &&
+         !throttle_rate.nil? &&
          !Livecheck.throttle_allows_bump?(formula, stable.version, throttle_rate:, throttle_days:)
         throttle_items = []
         throttle_items << "#{throttle_rate} releases on multiples of #{throttle_rate}" if throttle_rate
-        throttle_items << "#{throttle_days} #{Utils.pluralize("day", throttle_days)}" if throttle_days
 
         problem "Should only be updated every #{throttle_items.join(" or ")}"
       end

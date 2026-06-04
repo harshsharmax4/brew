@@ -1,11 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "download_strategy"
 
 RSpec.describe AbstractDownloadStrategy do
-  subject(:strategy) { Class.new(described_class).new(url, name, version, **specs) }
+  subject(:strategy) { Class.new(klass).new(url, name, version, **specs) }
 
+  let(:klass) { AbstractDownloadStrategy }
   let(:specs) { {} }
   let(:name) { "foo" }
   let(:url) { "https://example.com/foo.tar.gz" }

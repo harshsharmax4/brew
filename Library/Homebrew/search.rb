@@ -63,7 +63,7 @@ module Homebrew
 
       search_type ||= Descriptions::SearchField::Description
       both = !args.formula? && !args.cask?
-      eval_all = args.eval_all? || Homebrew::EnvConfig.eval_all?
+      eval_all = args.eval_all? || Homebrew::EnvConfig.tap_trust_configured?
 
       if args.formula? || both
         ohai "Formulae"
@@ -75,7 +75,8 @@ module Homebrew
         else
           unofficial = Tap.all.sum { |tap| tap.official? ? 0 : tap.formula_files.size }
           if unofficial.positive?
-            opoo "Use `--eval-all` to search #{unofficial} additional " \
+            opoo "Set `HOMEBREW_REQUIRE_TAP_TRUST=1` or `HOMEBREW_NO_REQUIRE_TAP_TRUST=1` to search " \
+                 "#{unofficial} additional " \
                  "#{Utils.pluralize("formula", unofficial)} in third party taps."
           end
           formulae = Homebrew::API::Formula.all_formulae
@@ -99,7 +100,8 @@ module Homebrew
       else
         unofficial = Tap.all.sum { |tap| tap.official? ? 0 : tap.cask_files.size }
         if unofficial.positive?
-          opoo "Use `--eval-all` to search #{unofficial} additional " \
+          opoo "Set `HOMEBREW_REQUIRE_TAP_TRUST=1` or `HOMEBREW_NO_REQUIRE_TAP_TRUST=1` to search " \
+               "#{unofficial} additional " \
                "#{Utils.pluralize("cask", unofficial)} in third party taps."
         end
         casks = Homebrew::API::Cask.all_casks
@@ -140,21 +142,16 @@ module Homebrew
         # Ignore aliases from results when the full name was also found
         next if aliases.include?(name) && results.include?(canonical_full_name)
 
-        display_name = if formula&.any_version_installed?
-          pretty_installed(name)
-        elsif formula.nil? || formula.valid_platform?
-          name
-        end
+        installed = formula&.any_version_installed? == true
+        next if formula && !formula.valid_platform? && !installed
 
-        next if display_name.nil?
-
-        if formula&.deprecated?
-          pretty_deprecated(display_name)
-        elsif formula&.disabled?
-          pretty_disabled(display_name)
-        else
-          display_name
-        end
+        pretty_install_status(
+          name,
+          installed:,
+          deprecated:       formula&.deprecated? == true,
+          disabled:         formula&.disabled? == true,
+          mark_uninstalled: false,
+        )
       end
     end
 
@@ -188,18 +185,13 @@ module Homebrew
         cask = Cask::CaskLoader.load(name.to_s)
         next if ignore_cask?(cask)
 
-        display_name = if cask.installed?
-          pretty_installed(cask.full_name)
-        else
-          cask.full_name
-        end
-        if cask.deprecated?
-          pretty_deprecated(display_name)
-        elsif cask.disabled?
-          pretty_disabled(display_name)
-        else
-          display_name
-        end
+        pretty_install_status(
+          cask.full_name,
+          installed:        cask.installed?,
+          deprecated:       cask.deprecated?,
+          disabled:         cask.disabled?,
+          mark_uninstalled: false,
+        )
       end.uniq
     end
 

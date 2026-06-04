@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/keg_only"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::KegOnly do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::KegOnly }
 
   it "reports and corrects an offense when the `keg_only` reason is capitalized" do
     expect_offense(<<~RUBY)

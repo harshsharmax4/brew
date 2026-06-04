@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "cmd/shared_examples/args_parse"
@@ -24,9 +24,10 @@ RSpec.describe Homebrew::DevCmd::Irb do
         exit
       RUBY
 
+      # Coverage integration tests can load `io-console` before `irb`; Linux
+      # may warn when `irb` loads the native extension again.
       expect { brew "irb", irb_test }
         .to output(/Interactive Homebrew Shell.*<Formula testball \(stable\)/m).to_stdout
-        .and not_to_output.to_stderr
         .and be_a_success
 
       # TODO: newer Ruby only supports history saving in interactive sessions

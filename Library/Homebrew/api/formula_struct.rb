@@ -3,6 +3,7 @@
 
 require "service"
 require "utils/spdx"
+require "install_steps"
 
 module Homebrew
   module API
@@ -93,6 +94,7 @@ module Homebrew
       const :deprecate_args, T::Hash[Symbol, T.nilable(T.any(String, Symbol))], default: {}
       const :desc, String
       const :disable_args, T::Hash[Symbol, T.nilable(T.any(String, Symbol))], default: {}
+      const :executables, T::Array[String], default: []
       const :head_dependencies, T::Array[DependsOnArgs], default: []
       const :head_url_args, [String, T::Hash[Symbol, T.anything]], default: ["", {}]
       const :head_uses_from_macos, T::Array[UsesFromMacOSArgs], default: []
@@ -102,7 +104,8 @@ module Homebrew
       const :link_overwrite_paths, T::Array[String], default: []
       const :no_autobump_args, T::Hash[Symbol, T.any(String, Symbol)], default: {}
       const :oldnames, T::Array[String], default: []
-      const :post_install_defined, T::Boolean, default: true
+      const :post_install_defined, T::Boolean, default: false
+      const :post_install_steps, Homebrew::InstallSteps::Steps, default: []
       const :pour_bottle_args, T::Hash[Symbol, Symbol], default: {}
       const :revision, Integer, default: 0
       const :ruby_source_checksum, String
@@ -111,6 +114,7 @@ module Homebrew
       const :service_run_args, T::Array[Homebrew::Service::RunParam], default: []
       const :service_run_kwargs, T::Hash[Symbol, Homebrew::Service::RunParam], default: {}
       const :stable_dependencies, T::Array[DependsOnArgs], default: []
+      const :stable_patches, T::Array[T::Hash[T.any(String, Symbol), T.untyped]], default: []
       const :stable_checksum, T.nilable(String)
       const :stable_url_args, [String, T::Hash[Symbol, T.anything]], default: ["", {}]
       const :stable_uses_from_macos, T::Array[UsesFromMacOSArgs], default: []

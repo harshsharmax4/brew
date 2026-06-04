@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "cmd/tab"
@@ -6,6 +6,8 @@ require "cmd/shared_examples/args_parse"
 require "tab"
 
 RSpec.describe Homebrew::Cmd::TabCmd do
+  let(:klass) { Homebrew::Cmd::TabCmd }
+
   def installed_on_request?(formula)
     # `brew` subprocesses can change the tab, invalidating the cached values.
     Tab.clear_cache
@@ -45,7 +47,7 @@ RSpec.describe Homebrew::Cmd::TabCmd do
 
     expect(tab_path).not_to exist
 
-    cmd = described_class.new(["--installed-on-request", "--cask", cask.token])
+    cmd = klass.new(["--installed-on-request", "--cask", cask.token])
     allow(cmd.args.named).to receive(:to_formulae_to_casks).and_return([[], [cask]])
     expect { cmd.run }
       .to output(/local-caffeine is now marked as installed on request/).to_stdout
@@ -56,7 +58,7 @@ RSpec.describe Homebrew::Cmd::TabCmd do
     tab_path.delete
     Cask::Tab.clear_cache
 
-    cmd = described_class.new(["--no-installed-on-request", "--cask", cask.token])
+    cmd = klass.new(["--no-installed-on-request", "--cask", cask.token])
     allow(cmd.args.named).to receive(:to_formulae_to_casks).and_return([[], [cask]])
     expect { cmd.run }
       .to output(/local-caffeine is already marked as not installed on request/).to_stdout

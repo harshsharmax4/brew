@@ -127,16 +127,19 @@ module Homebrew
 
       sig { params(cask: Cask::Cask).returns(T::Hash[T::Hash[Symbol, T.any(Symbol, String)], Float]) }
       def filter_runners(cask)
-        filtered_macos_runners = RUNNERS.select do |runner, _|
-          runner[:symbol] != :linux &&
-            cask.depends_on.macos.present? &&
-            cask.depends_on.macos.allows?(MacOSVersion.from_symbol(runner.fetch(:symbol).to_sym))
-        end
+        filtered_runners = T.let({}, T::Hash[T::Hash[Symbol, T.any(Symbol, String)], Float])
+        if cask.supports_macos?
+          filtered_macos_runners = RUNNERS.select do |runner, _|
+            runner[:symbol] != :linux &&
+              cask.depends_on.macos.present? &&
+              cask.depends_on.macos.allows?(MacOSVersion.from_symbol(runner.fetch(:symbol).to_sym))
+          end
 
-        filtered_runners = if filtered_macos_runners.any?
-          filtered_macos_runners
-        else
-          MACOS_RUNNERS.dup
+          filtered_runners = if filtered_macos_runners.any?
+            filtered_macos_runners
+          else
+            MACOS_RUNNERS.dup
+          end
         end
 
         macos_archs = architectures(cask:, os: :macos)
@@ -185,10 +188,8 @@ module Homebrew
       def architectures(cask:, os:)
         architectures = T.let([], T::Array[Symbol])
         [:arm, :intel].each do |arch|
-          tag = Utils::Bottles::Tag.new(system: os, arch: arch)
-          Homebrew::SimulateSystem.with_tag(tag) do
-            cask.refresh
-
+          tag = Utils::Bottles::Tag.new(system: os, arch:)
+          cask.refresh_for_tag(tag) do
             if cask.depends_on.arch.blank?
               architectures = RUNNERS.keys.map { |r| r.fetch(:arch).to_sym }.uniq.sort
               next
@@ -196,8 +197,6 @@ module Homebrew
 
             architectures = cask.depends_on.arch.map { |arch| arch[:type] }
           end
-        rescue ::Cask::CaskInvalidError
-          # Can't read cask for this system-arch combination.
         end
 
         architectures
@@ -226,11 +225,12 @@ module Homebrew
           # If the cask varies on a MacOS version, test it on every possible macOS version.
           [filtered_runners.keys, true]
         else
-          # Otherwise, select a runner from each architecture based on weighted random sample.
-          grouped_runners = filtered_runners.group_by { |runner, _| runner.fetch(:arch) }
-          selected_runners = grouped_runners.map do |_, runners|
-            random_runner(runners.to_h)
+          macos_runners, linux_runners = filtered_runners.partition do |runner, _|
+            runner.fetch(:symbol) != :linux
           end
+          selected_runners = macos_runners.group_by { |runner, _| runner.fetch(:arch) }.map do |_, runners|
+            random_runner(runners.to_h)
+          end + linux_runners.map(&:first)
           [selected_runners, false]
         end
       end

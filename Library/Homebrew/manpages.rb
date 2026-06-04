@@ -54,13 +54,13 @@ module Homebrew
         global_options:        global_options_manpage,
         environment_variables: env_vars_manpage,
         project_leader:        readme.read[/(Homebrew's \[Project Leader.*\.)/, 1]
-                               .gsub(/\[([^\]]+)\]\([^)]+\)/, '\1'),
+                                     .gsub(/\[([^\]]+)\]\([^)]+\)/, '\1'),
         lead_maintainers:      readme.read[/(Homebrew's \[Lead Maintainers.*\.)/, 1]
-                               .gsub(/\[([^\]]+)\]\([^)]+\)/, '\1'),
+                                     .gsub(/\[([^\]]+)\]\([^)]+\)/, '\1'),
         maintainers:           readme.read[/(Homebrew's other Maintainers .*\.)/, 1]
-                               .gsub(/\[([^\]]+)\]\([^)]+\)/, '\1'),
+                                     .gsub(/\[([^\]]+)\]\([^)]+\)/, '\1'),
         alumni:                readme.read[/(Former Maintainers .*\.)/, 1]
-                               .gsub(/\[([^\]]+)\]\([^)]+\)/, '\1'),
+                                     .gsub(/\[([^\]]+)\]\([^)]+\)/, '\1'),
       )
 
       ERB.new(template, trim_mode: ">").result(variables.instance_eval { binding })
@@ -98,9 +98,34 @@ module Homebrew
     sig { params(cmd_parser: CLI::Parser).returns(T::Array[String]) }
     def self.cmd_parser_manpage_lines(cmd_parser)
       lines = []
-      usage_banner_text = cmd_parser.usage_banner_text
-      lines << format_usage_banner(usage_banner_text) if usage_banner_text
-      lines += cmd_parser.processed_options.filter_map do |short, long, desc, hidden|
+      if cmd_parser.subcommands.present?
+        root_usage_banner_text = cmd_parser.root_usage_banner_text
+        lines << "#{format_usage_banner(root_usage_banner_text)}\n\n" if root_usage_banner_text
+        if (description = cmd_parser.description).present?
+          lines << "#{description}\n\n"
+        end
+
+        root_options = cmd_parser.processed_options_for_root_command
+        lines += option_manpage_lines(root_options)
+
+        cmd_parser.subcommands.each do |subcommand|
+          usage_banner = subcommand.usage_banner
+          next if usage_banner.blank?
+
+          lines << "#{format_usage_text(usage_banner)}\n\n"
+          lines += option_manpage_lines(cmd_parser.processed_options_for_subcommand(subcommand.name) - root_options)
+        end
+      else
+        usage_banner_text = cmd_parser.usage_banner_text
+        lines << format_usage_banner(usage_banner_text) if usage_banner_text
+        lines += option_manpage_lines(cmd_parser.processed_options)
+      end
+      lines
+    end
+
+    sig { params(options: CLI::Args::OptionsType).returns(T::Array[String]) }
+    def self.option_manpage_lines(options)
+      options.filter_map do |short, long, desc, hidden|
         next if hidden
 
         if long.present?
@@ -112,8 +137,8 @@ module Homebrew
 
         generate_option_doc(short, long, desc)
       end
-      lines
     end
+    private_class_method :option_manpage_lines
 
     sig { params(cmd_path: Pathname).returns(T.nilable(T::Array[String])) }
     def self.cmd_comment_manpage_lines(cmd_path)
@@ -196,7 +221,11 @@ module Homebrew
       ).returns(String)
     }
     def self.generate_option_doc(short, long, desc)
-      comma = (short && long) ? ", " : ""
+      comma = if short && long
+        ", "
+      else
+        ""
+      end
       <<~EOS
         #{format_opt(short)}#{comma}#{format_opt(long)}
 
@@ -207,8 +236,13 @@ module Homebrew
 
     sig { params(usage_banner: String).returns(String) }
     def self.format_usage_banner(usage_banner)
-      usage_banner.sub(/^(#: *\* )?/, "### ")
-                  .gsub(/(?<!`)\[([^\[\]]*)\](?!`)/, "\\[\\1\\]") # escape [] character (except those in code spans)
+      format_usage_text(usage_banner).sub(/^(#: *\* )?/, "### ")
     end
+
+    sig { params(usage_banner: String).returns(String) }
+    def self.format_usage_text(usage_banner)
+      usage_banner.gsub(/(?<!`)\[([^\[\]]*)\](?!`)/, "\\[\\1\\]") # escape [] character (except those in code spans)
+    end
+    private_class_method :format_usage_text
   end
 end

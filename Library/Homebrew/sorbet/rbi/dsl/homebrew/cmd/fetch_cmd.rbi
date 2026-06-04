@@ -14,6 +14,9 @@ class Homebrew::Cmd::FetchCmd::Args < Homebrew::CLI::Args
   sig { returns(T::Boolean) }
   def HEAD?; end
 
+  sig { returns(T::Boolean) }
+  def all_platforms?; end
+
   sig { returns(T.nilable(String)) }
   def arch; end
 

@@ -4,6 +4,8 @@
 require "utils/linkage"
 
 RSpec.describe Utils do
+  let(:klass) { Utils }
+
   [:needs_macos, :needs_linux].each do |needs_os|
     describe "::binary_linked_to_library?", needs_os do
       let(:suffix) { OS.mac? ? ".dylib" : ".so" }
@@ -38,14 +40,14 @@ RSpec.describe Utils do
       end
 
       it "returns true if the binary is linked to the library" do
-        result = described_class.binary_linked_to_library?(HOMEBREW_PREFIX/"bin/brewtest",
-                                                           HOMEBREW_PREFIX/"lib/libbrewfoo#{suffix}")
+        result = klass.binary_linked_to_library?(HOMEBREW_PREFIX/"bin/brewtest",
+                                                 HOMEBREW_PREFIX/"lib/libbrewfoo#{suffix}")
         expect(result).to be true
       end
 
       it "returns false if the binary is not linked to the library" do
-        result = described_class.binary_linked_to_library?(HOMEBREW_PREFIX/"bin/brewtest",
-                                                           HOMEBREW_PREFIX/"lib/libbrewbar#{suffix}")
+        result = klass.binary_linked_to_library?(HOMEBREW_PREFIX/"bin/brewtest",
+                                                 HOMEBREW_PREFIX/"lib/libbrewbar#{suffix}")
         expect(result).to be false
       end
 
@@ -53,7 +55,7 @@ RSpec.describe Utils do
         non_brew_library = "/usr/lib/libtest#{suffix}"
         shim = OS.mac? ? MachOShim : ELFShim
         allow_any_instance_of(shim).to receive(:dynamically_linked_libraries).and_return([non_brew_library])
-        result = described_class.binary_linked_to_library?(HOMEBREW_PREFIX/"bin/brewtest", non_brew_library)
+        result = klass.binary_linked_to_library?(HOMEBREW_PREFIX/"bin/brewtest", non_brew_library)
         expect(result).to be true
       end
     end

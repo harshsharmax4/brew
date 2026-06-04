@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/resource_requires_dependencies"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::ResourceRequiresDependencies do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::ResourceRequiresDependencies }
 
   context "when a formula does not have any resources" do
     it "does not report offenses" do

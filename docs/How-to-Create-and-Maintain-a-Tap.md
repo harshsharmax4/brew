@@ -89,6 +89,8 @@ Cloning into '/opt/homebrew/Library/Taps/alice/homebrew-tap'...
 ```
 
 This is the most convenient method for users as it requires only one command.
+It also trusts only the formula being installed. See [Tap Trust](Tap-Trust.md)
+for more information.
 
 ### Manual tap installation
 
@@ -108,6 +110,10 @@ After tapping, users can install your formulae either with:
 
 - `brew install foo` if there's no core formula with the same name
 - `brew install user/repository/foo` to avoid conflicts with core formulae
+
+Users who install by short name will need to run `brew trust user/repository`
+first when Homebrew requires explicit trust for non-official taps, in
+Homebrew 6.0.0 or 5.2.0, whichever comes first.
 
 ## Maintaining a tap
 

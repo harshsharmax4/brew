@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/dependency_order"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::DependencyOrder do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::DependencyOrder }
 
   context "when auditing `uses_from_macos`" do
     it "reports and corrects incorrectly ordered conditional dependencies" do

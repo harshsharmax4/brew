@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/homepage"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::Homepage do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::Homepage }
 
   context "when auditing homepage" do
     it "reports an offense when there is no homepage" do

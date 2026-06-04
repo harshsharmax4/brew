@@ -394,6 +394,20 @@ module Homebrew
       !@run.empty?
     end
 
+    sig { returns(T::Array[Pathname]) }
+    def path_dirs
+      [
+        path_dir(@working_dir),
+        path_dir(@root_dir),
+      ].push(
+        path_parent_dir(@input_path),
+        path_parent_dir(@log_path),
+        path_parent_dir(@error_log_path),
+      )
+       .compact
+       .uniq
+    end
+
     # Returns the `String` command to run manually instead of the service.
     sig { returns(String) }
     def manual_command
@@ -680,6 +694,19 @@ module Homebrew
             .gsub(HOMEBREW_PREFIX_PLACEHOLDER, HOMEBREW_PREFIX)
             .gsub(HOMEBREW_CELLAR_PLACEHOLDER, HOMEBREW_CELLAR)
             .gsub(HOMEBREW_HOME_PLACEHOLDER, Dir.home)
+    end
+
+    sig { params(path: T.nilable(String)).returns(T.nilable(Pathname)) }
+    def path_dir(path)
+      return if path.blank?
+      return unless path.start_with?("/", "~")
+
+      Pathname.new(File.expand_path(path))
+    end
+
+    sig { params(path: T.nilable(String)).returns(T.nilable(Pathname)) }
+    def path_parent_dir(path)
+      path_dir(path)&.dirname
     end
   end
 end

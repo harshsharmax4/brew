@@ -9,11 +9,11 @@ RSpec.describe Requirement do
 
   subject(:requirement) { klass.new }
 
-  let(:klass) { Class.new(described_class) }
+  let(:klass) { Class.new(Requirement) }
 
   describe "base class" do
     it "raises an error when instantiated" do
-      expect { described_class.new }
+      expect { Requirement.new }
         .to raise_error(RuntimeError, "Requirement is declared as abstract; it cannot be instantiated")
     end
   end
@@ -49,7 +49,7 @@ RSpec.describe Requirement do
   describe "#fatal?" do
     describe "#fatal true is specified" do
       let(:klass) do
-        Class.new(described_class) do
+        Class.new(Requirement) do
           fatal true
         end
       end
@@ -65,7 +65,7 @@ RSpec.describe Requirement do
   describe "#satisfied?" do
     describe "#satisfy with block and build_env returns true" do
       let(:klass) do
-        Class.new(described_class) do
+        Class.new(Requirement) do
           satisfy(build_env: false) do
             true
           end
@@ -77,7 +77,7 @@ RSpec.describe Requirement do
 
     describe "#satisfy with block and build_env returns false" do
       let(:klass) do
-        Class.new(described_class) do
+        Class.new(Requirement) do
           satisfy(build_env: false) do
             false
           end
@@ -89,7 +89,7 @@ RSpec.describe Requirement do
 
     describe "#satisfy returns true" do
       let(:klass) do
-        Class.new(described_class) do
+        Class.new(Requirement) do
           satisfy true
         end
       end
@@ -99,7 +99,7 @@ RSpec.describe Requirement do
 
     describe "#satisfy returns false" do
       let(:klass) do
-        Class.new(described_class) do
+        Class.new(Requirement) do
           satisfy false
         end
       end
@@ -109,7 +109,7 @@ RSpec.describe Requirement do
 
     describe "#satisfy with block returning true and without :build_env" do
       let(:klass) do
-        Class.new(described_class) do
+        Class.new(Requirement) do
           satisfy do
             true
           end
@@ -124,7 +124,7 @@ RSpec.describe Requirement do
 
     describe "#satisfy with block returning true and :build_env set to false" do
       let(:klass) do
-        Class.new(described_class) do
+        Class.new(Requirement) do
           satisfy(build_env: false) do
             true
           end
@@ -139,7 +139,7 @@ RSpec.describe Requirement do
 
     describe "#satisfy with block returning path and without :build_env" do
       let(:klass) do
-        Class.new(described_class) do
+        Class.new(Requirement) do
           satisfy do
             Pathname.new("/foo/bar/baz")
           end
@@ -157,7 +157,7 @@ RSpec.describe Requirement do
 
     describe "#satisfy with block returning path under HOMEBREW_PREFIX/bin" do
       let(:klass) do
-        Class.new(described_class) do
+        Class.new(Requirement) do
           satisfy do
             HOMEBREW_PREFIX/"bin/foo"
           end
@@ -175,7 +175,7 @@ RSpec.describe Requirement do
 
     describe "#satisfy with block returning path under HOMEBREW_PREFIX/sbin" do
       let(:klass) do
-        Class.new(described_class) do
+        Class.new(Requirement) do
           satisfy do
             HOMEBREW_PREFIX/"sbin/foo"
           end
@@ -193,7 +193,7 @@ RSpec.describe Requirement do
 
     describe "#satisfy with block calling #which and :build_env set to false" do
       let(:klass) do
-        Class.new(described_class) do
+        Class.new(Requirement) do
           satisfy(build_env: false) do
             which("sh")
           end
@@ -223,7 +223,7 @@ RSpec.describe Requirement do
     let(:klass) { self.class.const_get(const) }
 
     before do
-      stub_const const.to_s, Class.new(described_class)
+      stub_const const.to_s, Class.new(Requirement)
     end
 
     it(:name) { expect(requirement.name).to eq("foo") }
@@ -232,7 +232,7 @@ RSpec.describe Requirement do
 
   describe "#modify_build_environment" do
     context "without env proc" do
-      let(:klass) { Class.new(described_class) }
+      let(:klass) { Class.new(Requirement) }
 
       it "returns nil" do
         expect { requirement.modify_build_environment }.not_to raise_error

@@ -2,11 +2,14 @@
 # frozen_string_literal: true
 
 require "dependency_collector"
+require "sandbox"
 
 RSpec.describe DependencyCollector do
-  alias_matcher :be_a_build_requirement, :be_build
+  subject(:collector) { klass.new }
 
-  subject(:collector) { described_class.new }
+  let(:klass) { DependencyCollector }
+
+  alias_matcher :be_a_build_requirement, :be_build
 
   describe "#add" do
     let(:resource) { Resource.new }
@@ -49,6 +52,41 @@ RSpec.describe DependencyCollector do
         allow_any_instance_of(Object).to receive(:which).with("bzip2").and_return(Pathname.new("foo"))
         expect(collector.add(resource)).to be_nil
       end
+    end
+  end
+
+  describe "#bubblewrap_dep_if_needed" do
+    around do |example|
+      with_env(HOMEBREW_TESTS: nil) { example.run }
+    end
+
+    before do
+      allow(Homebrew::EnvConfig).to receive(:sandbox_linux?).and_return(true)
+      allow(DevelopmentTools).to receive(:needs_build_formulae?).and_return(false)
+      allow(Sandbox).to receive(:executable)
+      allow(Formula).to receive(:[]).with("bubblewrap").and_return(instance_double(Formula, deps: []))
+      collector.send(:global_dep_tree).clear
+    end
+
+    after do
+      collector.send(:global_dep_tree).clear
+    end
+
+    it "returns a Bubblewrap implicit dependency when the Linux sandbox needs one" do
+      expect(collector.bubblewrap_dep_if_needed(Set.new)).to eq(Dependency.new("bubblewrap", [:implicit]))
+    end
+
+    it "returns nil when Bubblewrap is already available" do
+      allow(Sandbox).to receive(:executable).and_return(Pathname("/usr/bin/bwrap"))
+
+      expect(collector.bubblewrap_dep_if_needed(Set.new)).to be_nil
+    end
+
+    it "returns nil for Bubblewrap and its dependencies" do
+      collector.send(:global_dep_tree)["bubblewrap"] = Set["libcap"]
+
+      expect(collector.bubblewrap_dep_if_needed(Set["bubblewrap"])).to be_nil
+      expect(collector.bubblewrap_dep_if_needed(Set["libcap"])).to be_nil
     end
   end
 end

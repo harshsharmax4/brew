@@ -1,11 +1,15 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/lines"
 
 RSpec.describe RuboCop::Cop::FormulaAudit do
+  let(:klass) { RuboCop::Cop::FormulaAudit }
+
   describe RuboCop::Cop::FormulaAudit::GenerateCompletionsDSL do
-    subject(:cop) { described_class.new }
+    subject(:cop) { klass.new }
+
+    let(:klass) { RuboCop::Cop::FormulaAudit::GenerateCompletionsDSL }
 
     it "reports an offense when writing to a shell completions file directly" do
       expect_offense(<<~RUBY, "/homebrew-core/Formula/foo.rb")
@@ -115,7 +119,9 @@ RSpec.describe RuboCop::Cop::FormulaAudit do
   end
 
   describe RuboCop::Cop::FormulaAudit::SingleGenerateCompletionsDSLCall do
-    subject(:cop) { described_class.new }
+    subject(:cop) { klass.new }
+
+    let(:klass) { RuboCop::Cop::FormulaAudit::SingleGenerateCompletionsDSLCall }
 
     it "reports an offense when using multiple #generate_completions_from_executable calls for different shells" do
       expect_offense(<<~RUBY)
@@ -139,6 +145,24 @@ RSpec.describe RuboCop::Cop::FormulaAudit do
 
           def install
             generate_completions_from_executable(bin/"foo", "completions")
+          end
+        end
+      RUBY
+    end
+
+    it "does not report an offense when shells are generated dynamically" do
+      expect_no_offenses(<<~RUBY)
+        class Foo < Formula
+          name "foo"
+
+          def install
+            generate_completions_from_executable(bin/"foo", "completions")
+            [:zsh, :bash].each do |shell|
+              generate_completions_from_executable(
+                bin/"foo", "completions", shell.to_s, "bar", shells: [shell], base_name: "bar",
+                shell_parameter_format: :none
+              )
+            end
           end
         end
       RUBY

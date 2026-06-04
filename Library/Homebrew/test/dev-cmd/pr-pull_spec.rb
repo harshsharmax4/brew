@@ -7,9 +7,8 @@ require "tap"
 require "cmd/shared_examples/args_parse"
 
 RSpec.describe Homebrew::DevCmd::PrPull do
-  include FileUtils
-
-  let(:pr_pull) { described_class.new(["foo"]) }
+  let(:klass) { Homebrew::DevCmd::PrPull }
+  let(:pr_pull) { klass.new(["foo"]) }
   let(:formula_rebuild) do
     <<~EOS
       class Foo < Formula
@@ -82,6 +81,8 @@ RSpec.describe Homebrew::DevCmd::PrPull do
   let(:formula_file) { tap.path/"Formula/foo.rb" }
   let(:cask_file) { tap.cask_dir/"food.rb" }
   let(:path) { Pathname(HOMEBREW_TAP_DIRECTORY/"homebrew/homebrew-foo") }
+
+  include FileUtils
 
   it_behaves_like "parseable arguments"
 

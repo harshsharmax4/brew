@@ -22,8 +22,6 @@ module Homebrew
         EOS
         switch "--explain",
                description: "Output explanation of how to get <command> by installing one of the providing formulae."
-        switch "--skip-update",
-               description: "Skip updating the executables database if any version exists on disk, no matter how old."
         named_args :command, min: 1
       end
     end

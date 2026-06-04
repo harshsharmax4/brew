@@ -1,4 +1,4 @@
-# typed: false
+# typed: strict
 # frozen_string_literal: true
 
 require "rubocops/rubocop-cask"
@@ -88,7 +88,7 @@ RSpec.describe RuboCop::Cop::Cask::UninstallMethodsOrder, :config do
 
               uninstall quit:       "com.example.foo",
                         signal:     ["TERM", "com.example.foo"],
-                        on_upgrade: [:quit, :signal],
+                        on_upgrade: :signal,
                         script:     {
                           executable: "/usr/local/bin/foo",
                           sudo:       false,
@@ -111,7 +111,7 @@ RSpec.describe RuboCop::Cop::Cask::UninstallMethodsOrder, :config do
 
               uninstall pkgutil:    "org.foo.bar",
                         on_upgrade: :quit
-                        ^^^^^^^^^^ `on_upgrade` has no effect without matching `uninstall quit:` or `uninstall signal:` directives
+                        ^^^^^^^^^^ `on_upgrade` has no effect without matching `uninstall signal:` directive
             end
           CASK
 
@@ -132,7 +132,7 @@ RSpec.describe RuboCop::Cop::Cask::UninstallMethodsOrder, :config do
 
             uninstall login_item: "FooApp",
                       on_upgrade: :quit,
-                      ^^^^^^^^^^ `on_upgrade` has no effect without matching `uninstall quit:` or `uninstall signal:` directives
+                      ^^^^^^^^^^ `on_upgrade` has no effect without matching `uninstall signal:` directive
                       pkgutil:    "org.foo.bar"
           end
         CASK
@@ -154,7 +154,7 @@ RSpec.describe RuboCop::Cop::Cask::UninstallMethodsOrder, :config do
           url "https://example.com/foo.zip"
 
           uninstall on_upgrade: :quit
-                    ^^^^^^^^^^ `on_upgrade` has no effect without matching `uninstall quit:` or `uninstall signal:` directives
+                    ^^^^^^^^^^ `on_upgrade` has no effect without matching `uninstall signal:` directive
         end
       CASK
     end
@@ -166,7 +166,7 @@ RSpec.describe RuboCop::Cop::Cask::UninstallMethodsOrder, :config do
             url "https://example.com/foo.zip"
 
             uninstall on_upgrade: :quit
-                      ^^^^^^^^^^ `on_upgrade` has no effect without matching `uninstall quit:` or `uninstall signal:` directives
+                      ^^^^^^^^^^ `on_upgrade` has no effect without matching `uninstall signal:` directive
           end
         CASK
       end
@@ -178,41 +178,22 @@ RSpec.describe RuboCop::Cop::Cask::UninstallMethodsOrder, :config do
           cask "foo" do
             url "https://example.com/foo.zip"
 
-            uninstall quit:       "com.example.foo",
+            uninstall signal:     [["TERM", "com.example.foo"]],
                       on_upgrade: [:quit, :signal]
-                                  ^^^^^^^^^^^^^^^^ `on_upgrade` lists :signal without matching `uninstall` directives
+                                  ^^^^^^^^^^^^^^^^ `on_upgrade` lists :quit without matching `uninstall` directives
           end
         CASK
       end
     end
 
-    context "when on_upgrade matches available directives (quit: or signal:)" do
-      it "does not register offense for :quit, :signal, or [:quit, :signal]" do
-        expect_no_offenses(<<~CASK)
-          cask "foo" do
-            url "https://example.com/foo.zip"
-
-            uninstall quit:       "com.example.app",
-                      on_upgrade: :quit
-          end
-        CASK
-
+    context "when on_upgrade matches available directives (signal: only)" do
+      it "does not register offense for :signal" do
         expect_no_offenses(<<~CASK)
           cask "foo" do
             url "https://example.com/foo.zip"
 
             uninstall signal:     [["TERM", "com.example.app"]],
                       on_upgrade: :signal
-          end
-        CASK
-
-        expect_no_offenses(<<~CASK)
-          cask "foo" do
-            url "https://example.com/foo.zip"
-
-            uninstall quit:       "com.example.foo",
-                      signal:     ["TERM", "com.example.foo"],
-                      on_upgrade: [:quit, :signal]
           end
         CASK
       end

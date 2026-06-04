@@ -4,7 +4,7 @@
 require "build_environment"
 
 RSpec.describe BuildEnvironment do
-  let(:env) { described_class.new }
+  let(:env) { BuildEnvironment.new }
 
   describe "#<<" do
     it "returns itself" do
@@ -31,7 +31,7 @@ RSpec.describe BuildEnvironment do
 
   describe BuildEnvironment::DSL do
     let(:build_environment_dsl) do
-      klass = described_class
+      klass = BuildEnvironment::DSL
       Class.new do
         extend(klass)
       end

@@ -36,7 +36,7 @@ For more information on how to express more complex types, refer to the official
 
 [RBI files](https://sorbet.org/docs/rbi) help Sorbet learn about constants, ancestors and methods defined in ways it doesn't understand natively. We can also create an RBI file to help Sorbet understand dynamic definitions. Some of these files are automatically generated (see the next section) and some are manually written, e.g. [`on_system.rbi`](https://github.com/Homebrew/brew/blob/HEAD/Library/Homebrew/on_system.rbi).
 
-There are also a very small number of files that Homebrew loads before `sorbet-runtime`, such as `utils/gems.rb`. Those files cannot have type signatures alongside the code itself, so RBI files are used there instead to retain static type checking.
+There are also a very small number of files that Homebrew loads before `sorbet-runtime`, such as `utils/gem_setup.rb`. Those files cannot have type signatures alongside the code itself, so RBI files are used there instead to retain static type checking.
 
 ### The [`Library/Homebrew/sorbet`] directory
 

@@ -1,4 +1,4 @@
-# typed: false
+# typed: strict
 # frozen_string_literal: true
 
 require "cmd/shared_examples/args_parse"
@@ -18,12 +18,12 @@ RSpec.describe Homebrew::DevCmd::Unpack do
     end
   end
 
-  it "unpacks a given Cask's archive", :integration_test do
+  it "unpacks a given Cask's archive" do
     caffeine_cask = Cask::CaskLoader.load(cask_path("local-caffeine"))
 
     mktmpdir do |path|
-      expect { brew "unpack", cask_path("local-caffeine"), "--destdir=#{path}" }
-        .to be_a_success
+      expect { Homebrew::DevCmd::Unpack.new([cask_path("local-caffeine").to_s, "--destdir=#{path}"]).run }
+        .not_to raise_error
 
       expect(path/"local-caffeine-#{caffeine_cask.version}").to be_a_directory
     end

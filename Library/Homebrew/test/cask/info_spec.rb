@@ -1,13 +1,14 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "utils"
 require "cask/info"
 
 RSpec.describe Cask::Info, :cask do
-  include Utils::Output::Mixin
-
+  let(:klass) { Cask::Info }
   let(:args) { instance_double(Homebrew::Cmd::Info::Args) }
+
+  include Utils::Output::Mixin
 
   def uninstalled(string)
     "#{Tty.bold}#{string} #{Formatter.error("✘")}#{Tty.reset}"
@@ -29,7 +30,7 @@ RSpec.describe Cask::Info, :cask do
     allow(cask).to receive(:installed?).and_return(true)
     allow(Cask::CaskLoader).to receive(:load).and_call_original
     allow(Cask::CaskLoader).to receive(:load).with(cask_name).and_return(cask)
-    allow(described_class).to receive(:installation_info).and_wrap_original do |method, arg, **kwargs|
+    allow(klass).to receive(:installation_info).and_wrap_original do |method, arg, **kwargs|
       (arg.token == cask_name) ? "Installed" : method.call(arg, **kwargs)
     end
     (Cask::Caskroom.path/cask_name).mkpath
@@ -44,7 +45,7 @@ RSpec.describe Cask::Info, :cask do
     allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
 
     expect do
-      described_class.info(Cask::CaskLoader.load("local-transmission"), args:)
+      klass.info(Cask::CaskLoader.load("local-transmission"), args:)
     end.to output(<<~EOS).to_stdout
       #{oh1_title uninstalled("local-transmission")} (Transmission): 2.61
       BitTorrent client
@@ -61,14 +62,14 @@ RSpec.describe Cask::Info, :cask do
     allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
 
     expect do
-      described_class.info(Cask::CaskLoader.load("with-depends-on-cask-multiple"), args:)
+      klass.info(Cask::CaskLoader.load("with-depends-on-cask-multiple"), args:)
     end.to output(<<~EOS).to_stdout
       #{oh1_title uninstalled("with-depends-on-cask-multiple")}: 1.2.3
       #{Formatter.url("https://brew.sh/with-depends-on-cask-multiple")}
       Not installed
       From: #{Formatter.url("https://github.com/Homebrew/homebrew-cask/blob/HEAD/Casks/w/with-depends-on-cask-multiple.rb")}
       #{ohai_title "Dependencies"}
-      Required (2): #{uninstalled("local-caffeine (cask)")}, #{uninstalled("local-transmission-zip (cask)")}
+      Required (2): local-caffeine (cask), local-transmission-zip (cask)
       Recursive Runtime (2): 0 installed #{Formatter.success("✔")}, 2 missing #{Formatter.error("✘")}
       #{requirements_section(installed("macOS >= 10.15"))}
       #{ohai_title "Artifacts"}
@@ -81,25 +82,25 @@ RSpec.describe Cask::Info, :cask do
     allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
     allow(cask).to receive_messages(supports_linux?: false)
 
-    expect { described_class.info(cask, args:) }
+    expect { klass.info(cask, args:) }
       .to output(/Requirements\nRequired: .*macOS >= 10\.15.*✔/).to_stdout
-    expect { described_class.info(cask, args:) }.to not_to_output(/==> Name/).to_stdout
-    expect { described_class.info(cask, args:) }.to not_to_output(/==> Description/).to_stdout
-    expect { described_class.info(cask, args:) }.to not_to_output(/Metadata/).to_stdout
+    expect { klass.info(cask, args:) }.to not_to_output(/==> Name/).to_stdout
+    expect { klass.info(cask, args:) }.to not_to_output(/==> Description/).to_stdout
+    expect { klass.info(cask, args:) }.to not_to_output(/Metadata/).to_stdout
   end
 
   it "prints cask dependencies if the Cask has any" do
     allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
     mock_cask_installed("local-transmission-zip")
     expect do
-      described_class.info(Cask::CaskLoader.load("with-depends-on-cask-multiple"), args:)
+      klass.info(Cask::CaskLoader.load("with-depends-on-cask-multiple"), args:)
     end.to output(<<~EOS).to_stdout
       #{oh1_title uninstalled("with-depends-on-cask-multiple")}: 1.2.3
       #{Formatter.url("https://brew.sh/with-depends-on-cask-multiple")}
       Not installed
       From: #{Formatter.url("https://github.com/Homebrew/homebrew-cask/blob/HEAD/Casks/w/with-depends-on-cask-multiple.rb")}
       #{ohai_title "Dependencies"}
-      Required (2): #{uninstalled("local-caffeine (cask)")}, #{installed("local-transmission-zip (cask)")}
+      Required (2): local-caffeine (cask), #{installed("local-transmission-zip (cask)")}
       Recursive Runtime (2): 1 installed #{Formatter.success("✔")}, 1 missing #{Formatter.error("✘")}
       #{requirements_section(installed("macOS >= 10.15"))}
       #{ohai_title "Artifacts"}
@@ -112,27 +113,27 @@ RSpec.describe Cask::Info, :cask do
     mock_cask_installed("local-caffeine")
     mock_cask_installed("local-transmission-zip")
     expect do
-      described_class.info(Cask::CaskLoader.load("with-depends-on-cask-multiple"), args:)
+      klass.info(Cask::CaskLoader.load("with-depends-on-cask-multiple"), args:)
     end.to output(/Recursive Runtime \(2\): all installed #{Formatter.success("✔")}/).to_stdout
   end
 
   it "prints cask and formulas dependencies if the Cask has both" do
     allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
     arch_requirements = if Hardware::CPU.arm?
-      "#{uninstalled("x86_64 architecture")}, #{installed("arm64 architecture")}"
+      "x86_64 architecture, #{installed("arm64 architecture")}"
     else
-      "#{installed("x86_64 architecture")}, #{uninstalled("arm64 architecture")}"
+      "#{installed("x86_64 architecture")}, arm64 architecture"
     end
 
     expect do
-      described_class.info(Cask::CaskLoader.load("with-depends-on-everything"), args:)
+      klass.info(Cask::CaskLoader.load("with-depends-on-everything"), args:)
     end.to output(<<~EOS).to_stdout
       #{oh1_title uninstalled("with-depends-on-everything")}: 1.2.3
       #{Formatter.url("https://brew.sh/with-depends-on-everything")}
       Not installed
       From: #{Formatter.url("https://github.com/Homebrew/homebrew-cask/blob/HEAD/Casks/w/with-depends-on-everything.rb")}
       #{ohai_title "Dependencies"}
-      Required (3): #{uninstalled("unar")}, #{uninstalled("local-caffeine (cask)")}, #{uninstalled("with-depends-on-cask (cask)")}
+      Required (3): unar, local-caffeine (cask), with-depends-on-cask (cask)
       Recursive Runtime (4): 0 installed #{Formatter.success("✔")}, 4 missing #{Formatter.error("✘")}
       #{requirements_section("#{arch_requirements}, #{installed("macOS >= 10.15")}")}
       #{ohai_title "Artifacts"}
@@ -144,7 +145,7 @@ RSpec.describe Cask::Info, :cask do
     allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
 
     expect do
-      described_class.info(Cask::CaskLoader.load("with-auto-updates"), args:)
+      klass.info(Cask::CaskLoader.load("with-auto-updates"), args:)
     end.to output(<<~EOS).to_stdout
       #{oh1_title uninstalled("with-auto-updates")} (AutoUpdates): 1.0 (auto_updates)
       https://brew.sh/autoupdates
@@ -156,11 +157,23 @@ RSpec.describe Cask::Info, :cask do
     EOS
   end
 
+  it "prints pinned cask metadata" do
+    allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
+    cask = Cask::CaskLoader.load("local-caffeine")
+    InstallHelper.stub_cask_installation(cask)
+    cask.pin
+
+    expect { klass.info(cask, args:) }
+      .to output(/Pinned: 1\.2\.3 on \d{4}-\d{2}-\d{2} at \d{2}:\d{2}:\d{2}/).to_stdout
+
+    cask.unpin
+  end
+
   it "prints caveats if the Cask provided one" do
     allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
 
     expect do
-      described_class.info(Cask::CaskLoader.load("with-caveats"), args:)
+      klass.info(Cask::CaskLoader.load("with-caveats"), args:)
     end.to output(<<~EOS).to_stdout
       #{oh1_title uninstalled("with-caveats")}: 1.2.3
       https://brew.sh/
@@ -186,7 +199,7 @@ RSpec.describe Cask::Info, :cask do
     allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
 
     expect do
-      described_class.info(Cask::CaskLoader.load("with-conditional-caveats"), args:)
+      klass.info(Cask::CaskLoader.load("with-conditional-caveats"), args:)
     end.to output(<<~EOS).to_stdout
       #{oh1_title uninstalled("with-conditional-caveats")}: 1.2.3
       https://brew.sh/
@@ -202,7 +215,7 @@ RSpec.describe Cask::Info, :cask do
     allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
 
     expect do
-      described_class.info(Cask::CaskLoader.load("with-languages"), args:)
+      klass.info(Cask::CaskLoader.load("with-languages"), args:)
     end.to output(<<~EOS).to_stdout
       #{oh1_title uninstalled("with-languages")}: 1.2.3
       https://brew.sh/
@@ -220,7 +233,7 @@ RSpec.describe Cask::Info, :cask do
     allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
 
     expect do
-      described_class.info(Cask::CaskLoader.load("without-languages"), args:)
+      klass.info(Cask::CaskLoader.load("without-languages"), args:)
     end.to output(<<~EOS).to_stdout
       #{oh1_title uninstalled("without-languages")}: 1.2.3
       https://brew.sh/
@@ -251,7 +264,7 @@ RSpec.describe Cask::Info, :cask do
       allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
 
       expect do
-        described_class.info(cask, args:)
+        klass.info(cask, args:)
       end.to output(<<~EOS).to_stdout
         ==> #{installed("local-transmission")} (Transmission): 2.61
         BitTorrent client
@@ -286,7 +299,7 @@ RSpec.describe Cask::Info, :cask do
       allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
 
       expect do
-        described_class.info(cask, args:)
+        klass.info(cask, args:)
       end.to output(<<~EOS).to_stdout
         ==> #{installed("local-transmission")} (Transmission): 2.61
         BitTorrent client
@@ -306,7 +319,7 @@ RSpec.describe Cask::Info, :cask do
     allow_any_instance_of(StringIO).to receive(:tty?).and_return(true)
 
     expect do
-      described_class.info(Cask::CaskLoader.load("with-non-executable-binary"), args:)
+      klass.info(Cask::CaskLoader.load("with-non-executable-binary"), args:)
     end.to output(<<~EOS).to_stdout
       #{oh1_title uninstalled("with-non-executable-binary")}: 1.2.3
       https://brew.sh/with-binary

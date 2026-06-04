@@ -2,10 +2,12 @@
 # frozen_string_literal: true
 
 RSpec.describe Cask::Download, :cask do
-  describe "#download_name" do
-    subject(:download_name) { described_class.new(cask).send(:download_name) }
+  let(:klass) { Cask::Download }
 
-    let(:download) { described_class.new(cask) }
+  describe "#download_name" do
+    subject(:download_name) { klass.new(cask).send(:download_name) }
+
+    let(:download) { klass.new(cask) }
     let(:token) { "example-cask" }
     let(:full_token) { token }
     let(:url) { instance_double(URL, to_s: url_to_s, specs: {}) }
@@ -53,7 +55,7 @@ RSpec.describe Cask::Download, :cask do
   describe "#fetch" do
     it "fails before downloading if sha256 :no_check is used with --require-sha" do
       no_checksum = Cask::CaskLoader.load(cask_path("no-checksum"))
-      download = described_class.new(no_checksum, require_sha: true)
+      download = klass.new(no_checksum, require_sha: true)
 
       expect(download).not_to receive(:downloader)
       expect { download.fetch }.to raise_error(/--require-sha/)
@@ -61,7 +63,7 @@ RSpec.describe Cask::Download, :cask do
   end
 
   describe "#verify_download_integrity" do
-    subject(:verification) { described_class.new(cask).verify_download_integrity(downloaded_path) }
+    subject(:verification) { klass.new(cask).verify_download_integrity(downloaded_path) }
 
     let(:tap) { nil }
     let(:cask) { instance_double(Cask::Cask, token: "cask", sha256: expected_sha256, tap:) }

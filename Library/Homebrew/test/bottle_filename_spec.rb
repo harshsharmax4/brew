@@ -1,12 +1,13 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "formula"
 require "software_spec"
 
 RSpec.describe Bottle::Filename do
-  subject(:filename) { described_class.new(name, version, tag, rebuild) }
+  subject(:filename) { klass.new(name, version, tag, rebuild) }
 
+  let(:klass) { Bottle::Filename }
   let(:name) { "user/repo/foo" }
   let(:version) { PkgVersion.new(Version.new("1.0"), 0) }
   let(:tag) { Utils::Bottles::Tag.from_symbol(:x86_64_linux) }
@@ -48,7 +49,7 @@ RSpec.describe Bottle::Filename do
   end
 
   describe "::create" do
-    subject(:filename) { described_class.create(f, tag, rebuild) }
+    subject(:filename) { klass.create(f, tag, rebuild) }
 
     let(:f) do
       formula do

@@ -1,19 +1,21 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "locale"
 require "os/mac"
 
 RSpec.describe OS::Mac do
+  let(:klass) { OS::Mac }
+
   describe "::languages" do
     it "returns a list of all languages" do
-      expect(described_class.languages).not_to be_empty
+      expect(klass.languages).not_to be_empty
     end
   end
 
   describe "::language" do
     it "returns the first item from #languages" do
-      expect(described_class.language).to eq(described_class.languages.first)
+      expect(klass.language).to eq(klass.languages.first)
     end
   end
 
@@ -31,13 +33,13 @@ RSpec.describe OS::Mac do
     it "returns the Xcode SDK path on Xcode-only systems" do
       allow(OS::Mac::Xcode).to receive(:installed?).and_return(true)
       allow(OS::Mac::CLT).to receive(:installed?).and_return(false)
-      expect(described_class.sdk_path).to eq(xcode_sdk_path)
+      expect(klass.sdk_path).to eq(xcode_sdk_path)
     end
 
     it "returns the CLT SDK path on CLT-only systems" do
       allow(OS::Mac::Xcode).to receive(:installed?).and_return(false)
       allow(OS::Mac::CLT).to receive(:installed?).and_return(true)
-      expect(described_class.sdk_path).to eq(clt_sdk_path)
+      expect(klass.sdk_path).to eq(clt_sdk_path)
     end
   end
 end

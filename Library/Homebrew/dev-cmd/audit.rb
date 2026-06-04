@@ -39,13 +39,16 @@ module Homebrew
                description: "Run additional, slower style checks that require a network connection."
         switch "--installed",
                description: "Only check formulae and casks that are currently installed."
+        # odeprecated: remove in a future release.
         switch "--eval-all",
                description: "Evaluate all available formulae and casks, whether installed or not, to audit them.",
-               env:         :eval_all
+               env:         :eval_all,
+               hidden:      true
         switch "--new",
                description: "Run various additional style checks to determine if a new formula or cask is eligible " \
                             "for Homebrew. This should be used when creating new formulae or casks and implies " \
                             "`--strict` and `--online`."
+        # odeprecated: remove in a future release.
         switch "--[no-]signing",
                description: "Audit for app signatures, which are required by macOS on ARM."
         switch "--changed",
@@ -108,9 +111,10 @@ module Homebrew
         skip_style = args.skip_style? || args.no_named? || tap_audit
         no_named_args = T.let(false, T::Boolean)
 
-        gem_groups = ["audit"]
+        gem_groups = ["audit", "ast"]
         gem_groups << "style" unless skip_style
         Homebrew.install_bundler_gems!(groups: gem_groups)
+        require "utils/ast"
 
         ENV.activate_extensions!
         ENV.setup_build_environment
@@ -152,11 +156,12 @@ module Homebrew
             [Formula.installed, Cask::Caskroom.casks]
           elsif args.no_named?
             eval_all = args.eval_all?
+            eval_all ||= Homebrew::EnvConfig.tap_trust_configured?
 
             unless eval_all
               # This odisabled should probably stick around indefinitely.
               odisabled "`brew audit`",
-                        "`brew audit --eval-all` or set `HOMEBREW_EVAL_ALL=1`"
+                        "set `HOMEBREW_REQUIRE_TAP_TRUST=1`"
             end
             no_named_args = true
             [
@@ -353,7 +358,7 @@ module Homebrew
       }
       def cask_for_audit(path, cask_audit_os, cask_audit_arch)
         if cask_audit_os == :linux
-          return if Pathname(path).read.match?(/^\s*depends_on(?:\s*\(\s*|\s+)(?::macos\b|macos:)/)
+          return if Utils::AST::CaskAST.new(Pathname(path).read).depends_on_macos?
 
           cask = SimulateSystem.with(os: :macos, arch: cask_audit_arch) do
             loaded_cask = Cask::CaskLoader.load(path)
@@ -368,7 +373,14 @@ module Homebrew
         SimulateSystem.with(os: cask_audit_os, arch: cask_audit_arch) { Cask::CaskLoader.load(path) }
       end
 
-      sig { params(results: T::Hash[[Symbol, Pathname], T::Array[T::Hash[Symbol, T.untyped]]]).void }
+      sig {
+        params(
+          results: T::Hash[
+            T::Array[T.any(String, Pathname)],
+            T::Array[T::Hash[Symbol, T.untyped]],
+          ],
+        ).void
+      }
       def print_problems(results)
         results.each do |(name, path), problems|
           problem_lines = format_problem_lines(problems)

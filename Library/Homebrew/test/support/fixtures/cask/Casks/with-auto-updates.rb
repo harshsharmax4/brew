@@ -9,6 +9,7 @@ cask "with-auto-updates" do
   homepage "https://brew.sh/autoupdates"
 
   auto_updates true
+  depends_on macos: :catalina
 
   app "AutoUpdates.app"
 end

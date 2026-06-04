@@ -1,4 +1,4 @@
-# typed: false
+# typed: strict
 # frozen_string_literal: true
 
 require "cmd/missing"
@@ -23,5 +23,41 @@ RSpec.describe Homebrew::Cmd::Missing do
       .to output("foo\n").to_stdout
       .and not_to_output.to_stderr
       .and be_a_failure
+  end
+
+  it "prints missing cask dependencies", :cask, :no_api do
+    cask = instance_double(Cask::Cask, full_name: "with-depends-on-everything",
+                                       to_s:      "with-depends-on-everything")
+    tab = instance_double(Cask::Tab, runtime_dependencies: {
+      "cask"    => [{ "full_name" => "local-caffeine" }],
+      "formula" => [{ "full_name" => "unar" }],
+    })
+    HOMEBREW_CELLAR.mkpath
+    allow(Formula).to receive(:installed).and_return([])
+    allow(Cask::Caskroom).to receive(:casks).and_return([cask])
+    allow(Cask::Tab).to receive(:for_cask).with(cask).and_return(tab)
+
+    expect { Homebrew::Cmd::Missing.new([]).run }
+      .to output("local-caffeine unar\n").to_stdout
+
+    expect(Homebrew).to have_failed
+  end
+
+  it "prints missing cask dependencies for named casks", :cask, :no_api do
+    cmd = Homebrew::Cmd::Missing.new(["with-depends-on-everything"])
+    cask = instance_double(Cask::Cask, full_name: "with-depends-on-everything",
+                                       to_s:      "with-depends-on-everything")
+    tab = instance_double(Cask::Tab, runtime_dependencies: {
+      "cask"    => [{ "full_name" => "local-caffeine" }],
+      "formula" => [{ "full_name" => "unar" }],
+    })
+    HOMEBREW_CELLAR.mkpath
+    allow(cmd.args.named).to receive(:to_resolved_formulae_to_casks).and_return([[], [cask]].map(&:freeze).freeze)
+    allow(Cask::Tab).to receive(:for_cask).with(cask).and_return(tab)
+
+    expect { cmd.run }
+      .to output("local-caffeine unar\n").to_stdout
+
+    expect(Homebrew).to have_failed
   end
 end

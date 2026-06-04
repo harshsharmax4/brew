@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "requirements/arch_requirement"
 
 RSpec.describe ArchRequirement do
-  subject(:requirement) { described_class.new([Hardware::CPU.type]) }
+  subject(:requirement) { klass.new([Hardware::CPU.type]) }
+
+  let(:klass) { ArchRequirement }
 
   describe "#satisfied?" do
     it "supports architecture symbols" do

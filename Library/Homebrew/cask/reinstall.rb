@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "utils/output"
+require "install"
 
 module Cask
   class Reinstall
@@ -58,11 +59,9 @@ module Cask
         end
 
         unless skip_prefetch
-          cask_installers.each(&:prelude)
-
+          Homebrew::Install.enqueue_cask_installers(cask_installers, download_queue:)
           oh1 "Fetching downloads for: #{casks.map { |cask| Formatter.identifier(cask.full_name) }.to_sentence}",
               truncate: false
-          cask_installers.each(&:enqueue_downloads)
           download_queue.fetch
         end
       ensure

@@ -12,29 +12,14 @@ require "utils/output"
 require "cask/caskroom"
 require "cask/quarantine"
 require "git_repository"
+require "missing"
 require "system_command"
+require "trust"
 
 module Homebrew
   # Module containing diagnostic checks.
   module Diagnostic
     extend Utils::Output::Mixin
-
-    sig {
-      params(formulae: T::Array[Formula], hide: T::Array[String], _block: T.nilable(
-        T.proc.params(formula_name: String, missing_dependencies: T::Array[Dependency]).void,
-      )).returns(T::Hash[String, T::Array[String]])
-    }
-    def self.missing_deps(formulae, hide = [], &_block)
-      missing = {}
-      formulae.each do |f|
-        missing_dependencies = f.missing_dependencies(hide: hide)
-        next if missing_dependencies.empty?
-
-        yield f.full_name, missing_dependencies if block_given?
-        missing[f.full_name] = missing_dependencies
-      end
-      missing
-    end
 
     sig { params(type: Symbol, fatal: T::Boolean).void }
     def self.checks(type, fatal: true)
@@ -134,6 +119,13 @@ module Homebrew
       sig { returns(T::Array[String]) }
       def build_from_source_checks
         [].freeze
+      end
+
+      sig { returns(T::Array[String]) }
+      def preinstall_checks
+        %w[
+          check_untrusted_taps
+        ].freeze
       end
 
       sig { returns(T::Array[String]) }
@@ -706,6 +698,61 @@ module Homebrew
         EOS
       end
 
+      sig { returns(T.nilable(String)) }
+      def check_untrusted_taps
+        return if Homebrew::EnvConfig.no_require_tap_trust?
+
+        untrusted_taps = Homebrew::Trust.wholly_untrusted_taps
+        return if untrusted_taps.empty?
+
+        untrusted_tap_names = untrusted_taps.map(&:name)
+        installed_formulae_by_tap = T.let({}, T::Hash[String, T::Array[String]])
+        Formula.racks.each do |rack|
+          next unless (keg = Keg.from_rack(rack))
+          next unless (tap = keg.tab.tap)
+          next unless untrusted_tap_names.include?(tap.name)
+
+          installed_formulae_by_tap[tap.name] ||= []
+          installed_formulae_by_tap.fetch(tap.name) << "#{tap.name}/#{rack.basename}"
+        rescue
+          nil
+        end
+        installed_formula_message = installed_formulae_by_tap.filter_map do |_tap_name, formulae|
+          next if formulae.empty?
+
+          "  brew trust --formula #{formulae.sort.join(" ")}"
+        end.join("\n")
+        trust_required_message = if Homebrew::EnvConfig.require_tap_trust?
+          "Homebrew is currently ignoring formulae, casks and commands from these taps because tap trust is required."
+        else
+          "Homebrew will ignore formulae, casks and commands from these taps when " \
+            "`HOMEBREW_REQUIRE_TAP_TRUST` is set.\n" \
+            "This will become the default in Homebrew 6.0.0 or 5.2.0, whichever comes first."
+        end
+
+        <<~EOS
+          The following taps are not trusted:
+            #{untrusted_tap_names.join("\n  ")}
+
+          #{trust_required_message}
+          Enable trust checks now with:
+            export HOMEBREW_REQUIRE_TAP_TRUST=1
+          Trust specific formulae, casks or commands with:
+            brew trust --formula <user>/<tap>/<formula>
+            brew trust --cask <user>/<tap>/<cask>
+            brew trust --command <user>/<tap>/<command>
+          #{"or trust installed formulae from these taps with:\n#{installed_formula_message}" if installed_formula_message.present?}
+          You can trust all formulae, casks and commands from these taps with:
+            brew trust #{untrusted_tap_names.join(" ")}
+          Prefer trusting only the specific formulae, casks or commands you need.
+          Untap them with:
+            brew untap #{untrusted_tap_names.join(" ")}
+          To keep allowing them by default during the transition:
+            export HOMEBREW_NO_REQUIRE_TAP_TRUST=1
+          This is not recommended and will be removed in a later release.
+        EOS
+      end
+
       sig { params(formula: Formula).returns(T::Boolean) }
       def __check_linked_brew!(formula)
         formula.installed_prefixes.each do |prefix|
@@ -752,24 +799,18 @@ module Homebrew
 
       sig { returns(T.nilable(String)) }
       def check_missing_deps
-        return unless HOMEBREW_CELLAR.exist?
+        return if !HOMEBREW_CELLAR.exist? && !Cask::Caskroom.path.exist?
 
         missing = Set.new
-        Homebrew::Diagnostic.missing_deps(Formula.installed).each_value do |deps|
+        Homebrew::Missing.deps(Formula.installed, Cask::Caskroom.casks).each_value do |deps|
           missing.merge(deps)
         end
         return if missing.empty?
 
-        resolvable_missing = missing.filter_map do |d|
-          d.to_installed_formula
-        rescue FormulaUnavailableError
-          nil
-        end
-
         <<~EOS
-          Some installed formulae are missing dependencies.
+          Some installed formulae or casks are missing dependencies.
           You should `brew install` the missing dependencies:
-            brew install #{resolvable_missing.sort_by(&:full_name) * " "}
+            brew install #{missing.sort * " "}
 
           Run `brew missing` for more details.
         EOS
@@ -877,7 +918,7 @@ module Homebrew
         rescue FormulaUnreadableError, FormulaClassUnavailableError,
                TapFormulaUnreadableError, TapFormulaClassUnavailableError => e
           formula_unavailable_exceptions << e
-        rescue FormulaUnavailableError, TapFormulaAmbiguityError
+        rescue Homebrew::UntrustedTapError, FormulaUnavailableError, TapFormulaAmbiguityError
           nil
         end
         return if formula_unavailable_exceptions.empty?
@@ -895,6 +936,8 @@ module Homebrew
 
           begin
             Formulary.from_rack(rack).keg_only?
+          rescue Homebrew::UntrustedTapError
+            true
           rescue FormulaUnavailableError, TapFormulaAmbiguityError
             false
           end

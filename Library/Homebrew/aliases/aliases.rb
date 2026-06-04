@@ -8,12 +8,19 @@ module Homebrew
   module Aliases
     extend Utils::Output::Mixin
 
-    RESERVED = T.let((
-        Commands.internal_commands +
-        Commands.internal_developer_commands +
-        Commands.internal_commands_aliases +
-        %w[alias unalias]
-      ).freeze, T::Array[String])
+    # Lazily computed to avoid a load-time cycle: `Commands.internal_commands`
+    # requires every `cmd/*.rb`, including `cmd/alias.rb`, which itself
+    # requires this file.
+    sig { returns(T::Array[String]) }
+    def self.reserved
+      @reserved ||= T.let(
+        (Commands.internal_commands +
+         Commands.internal_developer_commands +
+         Commands.internal_commands_aliases +
+         %w[alias unalias]).freeze,
+        T.nilable(T::Array[String]),
+      )
+    end
 
     sig { void }
     def self.init

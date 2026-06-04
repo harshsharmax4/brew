@@ -59,9 +59,6 @@ class SoftwareSpec
   sig { returns(T::Boolean) }
   attr_reader :depends_on_macos_set_in_block
 
-  sig { returns(T::Boolean) }
-  attr_reader :depends_on_linux_set_top_level
-
   def_delegators :@resource, :stage, :fetch, :verify_download_integrity, :source_modified_time,
                  :cached_download, :clear_cache, :checksum, :mirrors, :specs, :using, :version, :mirror,
                  :downloader, :download_queue_name, :download_queue_type
@@ -266,6 +263,11 @@ class SoftwareSpec
     @depends_on_macos_bare_set_top_level ||
       @depends_on_macos_version_set_top_level ||
       @depends_on_maximum_macos_set_top_level
+  end
+
+  sig { returns(T::Boolean) }
+  def depends_on_linux_set_top_level?
+    @depends_on_linux_set_top_level
   end
 
   sig { params(dep: T.untyped, set_in_block: T::Boolean).void }

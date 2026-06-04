@@ -6,9 +6,7 @@ require "git_repository"
 require "securerandom"
 
 RSpec.describe Homebrew::FormulaAuditor do
-  include FileUtils
-  include Test::Helper::Formula
-
+  let(:klass) { Homebrew::FormulaAuditor }
   let(:dir) { mktmpdir }
   let(:foo_version) do
     @count ||= 0
@@ -19,6 +17,9 @@ RSpec.describe Homebrew::FormulaAuditor do
   let(:origin_formula_path) { origin_tap_path/formula_subpath }
   let(:tap_path) { HOMEBREW_TAP_DIRECTORY/"homebrew/homebrew-bar" }
   let(:formula_path) { tap_path/formula_subpath }
+
+  include FileUtils
+  include Test::Helper::Formula
 
   def formula_auditor(name, text, options = {})
     path = Pathname.new "#{dir}/#{name}.rb"
@@ -35,7 +36,7 @@ RSpec.describe Homebrew::FormulaAuditor do
       options.delete :tap_audit_exceptions
     end
 
-    described_class.new(formula, **options)
+    klass.new(formula, **options)
   end
 
   def formula_gsub(before, after = "")
@@ -932,7 +933,7 @@ RSpec.describe Homebrew::FormulaAuditor do
       expect(fa.problems).to be_empty
     end
 
-    it "doesn't allow patch versions that aren't multiples when throttle interval has not elapsed" do
+    it "allows patch versions that aren't multiples when throttle interval has not elapsed" do
       fa = formula_auditor "foo", <<~RUBY, core_tap: true
         class Foo < Formula
           url "https://brew.sh/foo-1.0.1.tgz"
@@ -944,8 +945,7 @@ RSpec.describe Homebrew::FormulaAuditor do
       allow(Homebrew::Livecheck).to receive(:throttle_interval_elapsed?).and_return(false)
 
       fa.audit_specs
-      expect(fa.problems.first[:message])
-        .to match "Should only be updated every 10 releases on multiples of 10 or 1 day"
+      expect(fa.problems).to be_empty
     end
 
     it "allows throttle with only days when throttle interval has elapsed" do
@@ -963,7 +963,7 @@ RSpec.describe Homebrew::FormulaAuditor do
       expect(fa.problems).to be_empty
     end
 
-    it "doesn't allow throttle with only days when throttle interval has not elapsed" do
+    it "allows throttle with only days when throttle interval has not elapsed" do
       fa = formula_auditor "foo", <<~RUBY, core_tap: true
         class Foo < Formula
           url "https://brew.sh/foo-1.0.1.tgz"
@@ -975,7 +975,7 @@ RSpec.describe Homebrew::FormulaAuditor do
       allow(Homebrew::Livecheck).to receive(:throttle_interval_elapsed?).and_return(false)
 
       fa.audit_specs
-      expect(fa.problems.first[:message]).to match "Should only be updated every 1 day"
+      expect(fa.problems).to be_empty
     end
 
     it "allows non-versioned formulae to have a `HEAD` spec" do
@@ -1183,7 +1183,7 @@ RSpec.describe Homebrew::FormulaAuditor do
 
   describe "#audit_stable_version" do
     subject do
-      fa = described_class.new(Formulary.factory(formula_path), git: true)
+      fa = klass.new(Formulary.factory(formula_path), git: true)
       fa.audit_stable_version
       fa.problems.first&.fetch(:message)
     end
@@ -1243,7 +1243,7 @@ RSpec.describe Homebrew::FormulaAuditor do
 
   describe "#audit_revision dependency relationships" do
     subject do
-      fa = described_class.new(Formulary.factory(formula_path), git: true)
+      fa = klass.new(Formulary.factory(formula_path), git: true)
       fa.audit_revision
       fa.problems.first&.fetch(:message)
     end
@@ -1422,7 +1422,7 @@ RSpec.describe Homebrew::FormulaAuditor do
         name:     "bar",
       )
     end
-    let(:auditor) { described_class.new(target_formula, git: true) }
+    let(:auditor) { klass.new(target_formula, git: true) }
     let(:foo_path) { tap_path/"Formula/f/foo.rb" }
 
     it "resolves sharded formula paths when filtering by names" do
@@ -1475,7 +1475,7 @@ RSpec.describe Homebrew::FormulaAuditor do
         name:     "foo",
       )
     end
-    let(:auditor) { described_class.new(target_formula, git: true) }
+    let(:auditor) { klass.new(target_formula, git: true) }
     let(:formula_versions) { instance_double(FormulaVersions) }
 
     it "walks history from the merge-base with origin/HEAD" do
@@ -1513,7 +1513,7 @@ RSpec.describe Homebrew::FormulaAuditor do
         compatibility_version: current_compatibility_version,
       )
     end
-    let(:auditor) { described_class.new(target_formula, git: true) }
+    let(:auditor) { klass.new(target_formula, git: true) }
     let(:foo_path) { tap_path/"Formula/foo.rb" }
     let(:bar_path) { tap_path/"Formula/bar.rb" }
 
@@ -1668,7 +1668,7 @@ RSpec.describe Homebrew::FormulaAuditor do
         depends_on: dependency_names,
       )
     end
-    let(:auditor) { described_class.new(target_formula, git: true) }
+    let(:auditor) { klass.new(target_formula, git: true) }
     let(:bar_path) { tap_path/"Formula/bar.rb" }
     let(:foo_path) { tap_path/"Formula/foo.rb" }
     let(:current_dependency_compatibility) { 1 }
@@ -1839,7 +1839,7 @@ RSpec.describe Homebrew::FormulaAuditor do
         conflicts_with "bar"
       end
 
-      fa = described_class.new foo
+      fa = klass.new foo
       fa.audit_conflicts
 
       expect(fa.problems.first[:message])
@@ -1854,7 +1854,7 @@ RSpec.describe Homebrew::FormulaAuditor do
       end
       stub_formula_loader foo
 
-      fa = described_class.new foo
+      fa = klass.new foo
       fa.audit_conflicts
 
       expect(fa.problems.first[:message])
@@ -1876,7 +1876,7 @@ RSpec.describe Homebrew::FormulaAuditor do
         conflicts_with "foo"
       end
 
-      fa = described_class.new bar
+      fa = klass.new bar
       fa.audit_conflicts
 
       expect(fa.problems.first[:message])

@@ -4,19 +4,20 @@
 require "system_command"
 
 RSpec.describe SystemCommand::Result do
-  RSpec::Matchers.alias_matcher :a_string_containing, :include
-
   subject(:result) do
-    described_class.new([], output_array, instance_double(Process::Status, exitstatus: 0, success?: true),
-                        secrets: [])
+    klass.new([], output_array, instance_double(Process::Status, exitstatus: 0, success?: true),
+              secrets: [])
   end
 
+  let(:klass) { SystemCommand::Result }
   let(:output_array) do
     [
       [:stdout, "output\n"],
       [:stderr, "error\n"],
     ]
   end
+
+  RSpec::Matchers.alias_matcher :a_string_containing, :include
 
   describe "#to_ary" do
     it "can be destructed like `Open3.capture3`" do

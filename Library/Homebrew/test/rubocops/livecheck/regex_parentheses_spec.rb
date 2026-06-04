@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/livecheck"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::LivecheckRegexParentheses do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::LivecheckRegexParentheses }
 
   it "reports an offense when the `regex` call in the `livecheck` block does not use parentheses" do
     expect_offense(<<~RUBY)

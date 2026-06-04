@@ -62,7 +62,7 @@ jobs:
               git check-ignore --quiet "${gem_dir}" || exit_code=$?
               if (( exit_code != 0 )); then
                 if (( exit_code == 1 )); then
-                  echo "::error::VENDOR_VERSION needs bumping in utils/gems.rb" >&2
+                  echo "::error::VENDOR_VERSION needs bumping in utils/gem_setup.rb" >&2
                 else
                   echo "::error::git check-ignore failed" >&2
                 fi

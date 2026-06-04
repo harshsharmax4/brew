@@ -16,14 +16,19 @@ module Homebrew
         EOS
         switch "--all-supported",
                description: "Instead of selecting runners based on the chosen formula, return all supported runners."
+        # odeprecated: remove in a future release.
         switch "--eval-all",
                description: "Evaluate all available formulae, whether installed or not, to determine testing " \
                             "dependents.",
-               env:         :eval_all
+               env:         :eval_all,
+               hidden:      true
         switch "--dependents",
                description: "Determine runners for testing dependents. " \
-                            "Requires `--eval-all` or `HOMEBREW_EVAL_ALL=1` to be set.",
-               depends_on:  "--eval-all"
+                            "Requires `HOMEBREW_REQUIRE_TAP_TRUST=1` or `HOMEBREW_NO_REQUIRE_TAP_TRUST=1` to be set."
+        flag   "--dependent-shards=",
+               description: "Split each dependent runner into the given number of shards.",
+               depends_on:  "--dependents",
+               hidden:      true
 
         named_args max: 2
 
@@ -40,13 +45,27 @@ module Homebrew
           raise UsageError, "`--all-supported` is mutually exclusive to other arguments."
         end
 
+        eval_all = args.eval_all?
+        eval_all ||= Homebrew::EnvConfig.tap_trust_configured?
+        if args.dependents? && !eval_all
+          raise UsageError, "`brew determine-test-runners --dependents` needs " \
+                            "`HOMEBREW_REQUIRE_TAP_TRUST=1` or `HOMEBREW_NO_REQUIRE_TAP_TRUST=1` set!"
+        end
+
         testing_formulae = args.named.first&.split(",").to_a.map do |name|
-          TestRunnerFormula.new(Formulary.factory(name), eval_all: args.eval_all?)
+          TestRunnerFormula.new(Formulary.factory(name), eval_all:)
         end.freeze
         deleted_formulae = args.named.second&.split(",").to_a.freeze
+        dependent_shards = args.dependent_shards || "1"
+        unless dependent_shards.match?(/\A[1-9]\d*\z/)
+          raise UsageError,
+                "`--dependent-shards` must be a positive integer."
+        end
+
         runner_matrix = GitHubRunnerMatrix.new(testing_formulae, deleted_formulae,
                                                all_supported:    args.all_supported?,
-                                               dependent_matrix: args.dependents?)
+                                               dependent_matrix: args.dependents?,
+                                               dependent_shards: dependent_shards.to_i)
         runners = runner_matrix.active_runner_specs_hash
 
         ohai "Runners", JSON.pretty_generate(runners)

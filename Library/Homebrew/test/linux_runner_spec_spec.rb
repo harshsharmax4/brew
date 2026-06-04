@@ -4,8 +4,10 @@
 require "linux_runner_spec"
 
 RSpec.describe LinuxRunnerSpec do
+  let(:klass) { LinuxRunnerSpec }
+
   let(:spec) do
-    described_class.new(
+    klass.new(
       name:      "Linux",
       runner:    "ubuntu-latest",
       container: { image: "ghcr.io/homebrew/brew:main", options: "--user=linuxbrew" },

@@ -4,7 +4,9 @@
 require "bottle_specification"
 
 RSpec.describe BottleSpecification do
-  subject(:bottle_spec) { described_class.new }
+  subject(:bottle_spec) { klass.new }
+
+  let(:klass) { BottleSpecification }
 
   describe "#sha256" do
     it "works without cellar" do

@@ -4,6 +4,7 @@
 require "utils/bottles"
 require "utils/output"
 require "installed_dependents"
+require "stringio"
 
 require "formula"
 require "cask/cask_loader"
@@ -272,21 +273,53 @@ module Homebrew
     sig { returns(T::Boolean) }
     def scrub? = @scrub
 
-    sig { params(formula: Formula, dry_run: T::Boolean).void }
-    def self.install_formula_clean!(formula, dry_run: false)
-      return if Homebrew::EnvConfig.no_install_cleanup?
-      return unless formula.latest_version_installed?
-      return if skip_clean_formula?(formula)
+    sig { params(output: String, ohai: T::Boolean).returns(T::Boolean) }
+    def self.printed_dry_run_output?(output, ohai: false)
+      return false if output.blank?
 
-      if dry_run
-        ohai "Would run `brew cleanup #{formula}`"
+      if ohai
+        ohai "Would `brew cleanup`"
       else
-        ohai "Running `brew cleanup #{formula}`..."
+        puts "Would `brew cleanup`:"
       end
+      print output
+      puts unless output.end_with?("\n")
+      true
+    end
 
+    sig { params(args: String, formulae: T::Array[Formula]).returns(String) }
+    def self.dry_run_output(*args, formulae: [])
+      output = StringIO.new
+      old_stdout = $stdout
+      begin
+        $stdout = output
+        cleanup = Cleanup.new(*args, dry_run: true)
+        if formulae.empty?
+          cleanup.clean!
+        else
+          formulae.each { |formula| cleanup.cleanup_formula(formula) }
+        end
+      ensure
+        $stdout = old_stdout
+      end
+      output.string
+    end
+
+    sig { params(formulae: T::Array[Formula]).returns(T::Array[Formula]) }
+    def self.install_cleanup_formulae(formulae)
+      return [] if Homebrew::EnvConfig.no_install_cleanup?
+
+      formulae.select do |formula|
+        formula.latest_version_installed? && !skip_clean_formula?(formula)
+      end
+    end
+
+    sig { params(formula: Formula).void }
+    def self.install_formula_clean!(formula)
+      return if install_cleanup_formulae([formula]).blank?
+
+      ohai "Running `brew cleanup #{formula}`..."
       puts_no_install_cleanup_disable_message_if_not_already!
-      return if dry_run
-
       Cleanup.new.cleanup_formula(formula)
     end
 

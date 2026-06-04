@@ -1,11 +1,13 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "socket"
 require "formula_free_port"
 
 RSpec.describe Homebrew::FreePort do
-  subject(:instance) { Object.new.extend(described_class) }
+  subject(:instance) { Object.new.extend(klass) }
+
+  let(:klass) { Homebrew::FreePort }
 
   describe "#free_port" do
     it "returns a free TCP/IP port" do

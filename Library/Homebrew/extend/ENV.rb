@@ -3,6 +3,7 @@
 
 require "hardware"
 require "diagnostic"
+require "extend/ENV/sensitive"
 require "extend/ENV/shared"
 require "extend/ENV/std"
 require "extend/ENV/super"
@@ -18,6 +19,8 @@ require "extend/ENV/super"
 # <!-- vale on -->
 
 module EnvActivation
+  include EnvSensitive
+
   sig { params(env: T.nilable(String)).void }
   def activate_extensions!(env: nil)
     if superenv?(env)
@@ -51,21 +54,6 @@ module EnvActivation
     ensure
       replace(old_env)
     end
-  end
-
-  sig { params(key: T.any(String, Symbol)).returns(T::Boolean) }
-  def sensitive?(key)
-    key.match?(/(cookie|key|token|password|passphrase|auth)/i)
-  end
-
-  sig { returns(T::Hash[String, String]) }
-  def sensitive_environment
-    select { |key, _| sensitive?(key) }
-  end
-
-  sig { void }
-  def clear_sensitive_environment!
-    each_key { |key| delete key if sensitive?(key) }
   end
 end
 

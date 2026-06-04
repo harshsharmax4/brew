@@ -4,6 +4,8 @@
 require "utils/autoremove"
 
 RSpec.describe Utils::Autoremove do
+  let(:klass) { Utils::Autoremove }
+
   shared_context "with formulae for dependency testing" do
     let(:formula_with_deps) do
       formula "zero" do
@@ -75,7 +77,7 @@ RSpec.describe Utils::Autoremove do
       it "filters out runtime dependencies" do
         allow(tab_from_keg).to receive(:poured_from_bottle).and_return(true)
 
-        expect(described_class.send(:bottled_formulae_with_no_formula_dependents, formulae))
+        expect(klass.send(:bottled_formulae_with_no_formula_dependents, formulae))
           .to eq([formula_with_deps, formula_is_build_dep])
       end
     end
@@ -84,7 +86,7 @@ RSpec.describe Utils::Autoremove do
       it "filters out formulae" do
         allow(tab_from_keg).to receive(:poured_from_bottle).and_return(false)
 
-        expect(described_class.send(:bottled_formulae_with_no_formula_dependents, formulae))
+        expect(klass.send(:bottled_formulae_with_no_formula_dependents, formulae))
           .to eq([])
       end
     end
@@ -98,7 +100,7 @@ RSpec.describe Utils::Autoremove do
         expect(formula_with_deps).not_to receive(:installed_runtime_formula_dependencies)
         expect(first_formula_dep).not_to receive(:installed_runtime_formula_dependencies)
 
-        expect(described_class.send(:bottled_formulae_with_no_formula_dependents, formulae))
+        expect(klass.send(:bottled_formulae_with_no_formula_dependents, formulae))
           .to eq([formula_with_deps, formula_is_build_dep])
       end
     end
@@ -114,21 +116,21 @@ RSpec.describe Utils::Autoremove do
     specify "installed on request" do
       allow(tab_from_keg).to receive_messages(installed_on_request: true, installed_on_request_present?: true)
 
-      expect(described_class.send(:unused_formulae_with_no_formula_dependents, formulae))
+      expect(klass.send(:unused_formulae_with_no_formula_dependents, formulae))
         .to eq([])
     end
 
     specify "not installed on request" do
       allow(tab_from_keg).to receive_messages(installed_on_request: false, installed_on_request_present?: true)
 
-      expect(described_class.send(:unused_formulae_with_no_formula_dependents, formulae))
+      expect(klass.send(:unused_formulae_with_no_formula_dependents, formulae))
         .to match_array(formulae)
     end
 
     specify "installed on request is null" do
       allow(tab_from_keg).to receive_messages(installed_on_request: false, installed_on_request_present?: false)
 
-      expect(described_class.send(:unused_formulae_with_no_formula_dependents, formulae))
+      expect(klass.send(:unused_formulae_with_no_formula_dependents, formulae))
         .to eq([])
     end
   end
@@ -177,17 +179,17 @@ RSpec.describe Utils::Autoremove do
     include_context "with formulae and casks for dependency testing"
 
     specify "no dependents" do
-      expect(described_class.send(:cask_dependent_formula_names, casks_no_deps, formulae))
+      expect(klass.send(:cask_dependent_formula_names, casks_no_deps, formulae))
         .to eq(Set.new)
     end
 
     specify "one dependent" do
-      expect(described_class.send(:cask_dependent_formula_names, casks_one_dep, formulae))
+      expect(klass.send(:cask_dependent_formula_names, casks_one_dep, formulae))
         .to contain_exactly("two")
     end
 
     specify "multiple dependents" do
-      expect(described_class.send(:cask_dependent_formula_names, casks_multiple_deps, formulae))
+      expect(klass.send(:cask_dependent_formula_names, casks_multiple_deps, formulae))
         .to contain_exactly("zero", "one", "two")
     end
   end

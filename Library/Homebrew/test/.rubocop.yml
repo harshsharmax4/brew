@@ -15,3 +15,7 @@ RSpec/ContextWording:
     - for
     - which
     - to
+
+# RSpec helper methods typecheck better as regular methods.
+Sorbet/BlockMethodDefinition:
+  Enabled: false

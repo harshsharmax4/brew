@@ -58,6 +58,11 @@ module Cask
         puts "mv #{new_caskroom_path}/#{old_installed_caskfile} #{new_caskroom_path}/#{new_installed_caskfile}"
         puts "rm -r #{old_caskroom_path}"
         puts "ln -s #{new_caskroom_path.basename} #{old_caskroom_path}"
+        if (old_pin_path = old_cask.pin_path).symlink? && (pinned_version = old_cask.pinned_version)
+          new_pin_path = new_cask.pin_path
+          puts "rm #{old_pin_path}"
+          puts "ln -s #{(new_caskroom_path/pinned_version).relative_path_from(new_pin_path.dirname)} #{new_pin_path}"
+        end
       else
         oh1 "Migrating cask #{Formatter.identifier(old_token)} to #{Formatter.identifier(new_token)}"
 
@@ -72,6 +77,14 @@ module Cask
 
         FileUtils.rm_r old_caskroom_path
         FileUtils.ln_s new_caskroom_path.basename, old_caskroom_path
+        if old_cask.pin_path.symlink? && (pinned_version = old_cask.pinned_version)
+          begin
+            new_cask.pin_path.make_relative_symlink(new_caskroom_path/pinned_version)
+            old_cask.unpin
+          rescue => e
+            opoo "Failed to migrate cask pin from #{old_token} to #{new_token}: #{e}"
+          end
+        end
       end
     end
 

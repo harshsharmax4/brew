@@ -10,13 +10,4 @@ class Homebrew::DevCmd::UpdatePortableRuby
   def args; end
 end
 
-class Homebrew::DevCmd::UpdatePortableRuby::Args < Homebrew::CLI::Args
-  sig { returns(T::Boolean) }
-  def dry_run?; end
-
-  sig { returns(T::Boolean) }
-  def n?; end
-
-  sig { returns(T::Boolean) }
-  def skip_vendor_install?; end
-end
+class Homebrew::DevCmd::UpdatePortableRuby::Args < Homebrew::CLI::Args; end

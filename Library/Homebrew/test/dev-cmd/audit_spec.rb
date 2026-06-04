@@ -1,14 +1,16 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "dev-cmd/audit"
 require "cmd/shared_examples/args_parse"
 
 RSpec.describe Homebrew::DevCmd::Audit do
+  let(:klass) { Homebrew::DevCmd::Audit }
+
   it_behaves_like "parseable arguments"
 
   describe "#run" do
-    subject(:audit) { described_class.new(["--tap=homebrew/test"]) }
+    subject(:audit) { klass.new(["--tap=homebrew/test"]) }
 
     let(:tap_path) { mktmpdir }
     let(:macos_only_cask_file) { tap_path/"Casks/macos-only-example.rb" }
@@ -44,6 +46,8 @@ RSpec.describe Homebrew::DevCmd::Audit do
       RUBY
 
       allow(Homebrew).to receive(:install_bundler_gems!)
+      ENV.activate_extensions!
+      allow(ENV).to receive(:setup_build_environment)
       allow(Tap).to receive(:fetch).and_call_original
       allow(Tap).to receive(:fetch).with("homebrew/test").and_return(tap)
       allow(Tap).to receive(:installed).and_return([])

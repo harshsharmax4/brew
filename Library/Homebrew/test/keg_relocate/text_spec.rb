@@ -1,11 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "keg_relocate"
 
 RSpec.describe Keg do
-  subject(:keg) { described_class.new(HOMEBREW_CELLAR/"foo/1.0.0") }
+  subject(:keg) { klass.new(HOMEBREW_CELLAR/"foo/1.0.0") }
 
+  let(:klass) { Keg }
   let(:dir) { mktmpdir }
   let(:file) { dir/"file.txt" }
   let(:placeholder) { "@@PLACEHOLDER@@" }
@@ -26,7 +27,7 @@ RSpec.describe Keg do
   end
 
   def setup_relocation(placeholders: false)
-    relocation = described_class::Relocation.new
+    relocation = Keg::Relocation.new
 
     if placeholders
       relocation.add_replacement_pair :dir, placeholder, dir.to_s
@@ -40,10 +41,10 @@ RSpec.describe Keg do
   specify "::text_matches_in_file" do
     setup_file
 
-    result = described_class.text_matches_in_file(file, placeholder, [], [], nil)
+    result = klass.text_matches_in_file(file, placeholder, [], [], nil)
     expect(result.count).to eq 0
 
-    result = described_class.text_matches_in_file(file, dir.to_s, [], [], nil)
+    result = klass.text_matches_in_file(file, dir.to_s, [], [], nil)
     expect(result.count).to eq 2
   end
 

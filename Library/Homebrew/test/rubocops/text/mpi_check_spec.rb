@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/lines"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::MpiCheck do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::MpiCheck }
 
   context "when auditing MPI dependencies" do
     it "reports and corrects an offense when using depends_on \"mpich\" in homebrew/core" do

@@ -1,12 +1,13 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "bundle"
 require "bundle/remover"
 
 RSpec.describe Homebrew::Bundle::Remover do
-  subject(:remover) { described_class }
+  subject(:remover) { klass }
 
+  let(:klass) { Homebrew::Bundle::Remover }
   let(:name) { "foo" }
 
   before { allow(Formulary).to receive(:factory).with(name).and_raise(FormulaUnavailableError.new(name)) }

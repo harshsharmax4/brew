@@ -4,6 +4,8 @@
 require "cask/denylist"
 
 RSpec.describe Cask::Denylist, :cask do
+  let(:klass) { Cask::Denylist }
+
   describe "::reason" do
     matcher :disallow do |name|
       match do |expected|
@@ -12,14 +14,14 @@ RSpec.describe Cask::Denylist, :cask do
     end
 
     specify(:aggregate_failures) do
-      expect(described_class).not_to disallow("adobe-air")
-      expect(described_class).to disallow("adobe-after-effects")
-      expect(described_class).to disallow("adobe-illustrator")
-      expect(described_class).to disallow("adobe-indesign")
-      expect(described_class).to disallow("adobe-photoshop")
-      expect(described_class).to disallow("adobe-premiere")
-      expect(described_class).to disallow("pharo")
-      expect(described_class).not_to disallow("allowed-cask")
+      expect(klass).not_to disallow("adobe-air")
+      expect(klass).to disallow("adobe-after-effects")
+      expect(klass).to disallow("adobe-illustrator")
+      expect(klass).to disallow("adobe-indesign")
+      expect(klass).to disallow("adobe-photoshop")
+      expect(klass).to disallow("adobe-premiere")
+      expect(klass).to disallow("pharo")
+      expect(klass).not_to disallow("allowed-cask")
     end
   end
 end

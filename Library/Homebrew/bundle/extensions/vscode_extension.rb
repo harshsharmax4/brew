@@ -9,6 +9,7 @@ module Homebrew
       PACKAGE_TYPE = :vscode
       PACKAGE_TYPE_NAME = "VSCode Extension"
       BANNER_NAME = "VSCode (and forks/variants) extensions"
+      EXTENSION_ID_REGEX = /\A[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9._-]*\z/i
 
       class << self
         sig { override.void }
@@ -46,7 +47,7 @@ module Homebrew
             Bundle.exchange_uid_if_needed! do
               ENV["WSL_DISTRO_NAME"] = ENV.fetch("HOMEBREW_WSL_DISTRO_NAME", nil)
               `"#{vscode}" --list-extensions 2>/dev/null`
-            end.split("\n").map(&:downcase)
+            end.split("\n").map(&:strip).grep(EXTENSION_ID_REGEX).map(&:downcase)
           end
           return [] if @extensions.nil?
 

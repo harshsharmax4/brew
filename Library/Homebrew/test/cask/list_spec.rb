@@ -1,9 +1,11 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "cask/list"
 
 RSpec.describe Cask::List, :cask do
+  let(:klass) { Cask::List }
+
   it "lists the installed Casks in a pretty fashion" do
     casks = %w[local-caffeine local-transmission].map { |c| Cask::CaskLoader.load(c) }
 
@@ -12,7 +14,7 @@ RSpec.describe Cask::List, :cask do
     end
 
     expect do
-      described_class.list_casks
+      klass.list_casks
     end.to output(<<~EOS).to_stdout
       local-caffeine
       local-transmission
@@ -31,7 +33,7 @@ RSpec.describe Cask::List, :cask do
     end
 
     expect do
-      described_class.list_casks(one: true)
+      klass.list_casks(one: true)
     end.to output(<<~EOS).to_stdout
       local-caffeine
       local-transmission
@@ -51,7 +53,7 @@ RSpec.describe Cask::List, :cask do
     end
 
     expect do
-      described_class.list_casks(full_name: true)
+      klass.list_casks(full_name: true)
     end.to output(<<~EOS).to_stdout
       local-caffeine
       local-transmission
@@ -81,13 +83,13 @@ RSpec.describe Cask::List, :cask do
 
     it "of all installed Casks" do
       expect do
-        described_class.list_casks(versions: true)
+        klass.list_casks(versions: true)
       end.to output(expected_output).to_stdout
     end
 
     it "of given Casks" do
       expect do
-        described_class.list_casks(*casks, versions: true)
+        klass.list_casks(*casks, versions: true)
       end.to output(expected_output).to_stdout
     end
   end
@@ -105,7 +107,7 @@ RSpec.describe Cask::List, :cask do
       end
 
       expect do
-        described_class.list_casks(transmission, caffeine)
+        klass.list_casks(transmission, caffeine)
       end.to output(<<~EOS).to_stdout
         ==> App
         #{transmission.config.appdir.join("Transmission.app")} (#{transmission.config.appdir.join("Transmission.app").abv})
@@ -118,28 +120,28 @@ RSpec.describe Cask::List, :cask do
   describe "TAP_AND_NAME_COMPARISON" do
     describe "both strings are only names" do
       it "alphabetizes the strings" do
-        expect(%w[a b].sort(&described_class::TAP_AND_NAME_COMPARISON)).to eq(%w[a b])
-        expect(%w[b a].sort(&described_class::TAP_AND_NAME_COMPARISON)).to eq(%w[a b])
+        expect(%w[a b].sort(&Cask::List::TAP_AND_NAME_COMPARISON)).to eq(%w[a b])
+        expect(%w[b a].sort(&Cask::List::TAP_AND_NAME_COMPARISON)).to eq(%w[a b])
       end
     end
 
     describe "both strings include tap" do
       it "alphabetizes the strings" do
-        expect(%w[a/z/z b/z/z].sort(&described_class::TAP_AND_NAME_COMPARISON)).to eq(%w[a/z/z b/z/z])
-        expect(%w[b/z/z a/z/z].sort(&described_class::TAP_AND_NAME_COMPARISON)).to eq(%w[a/z/z b/z/z])
+        expect(%w[a/z/z b/z/z].sort(&Cask::List::TAP_AND_NAME_COMPARISON)).to eq(%w[a/z/z b/z/z])
+        expect(%w[b/z/z a/z/z].sort(&Cask::List::TAP_AND_NAME_COMPARISON)).to eq(%w[a/z/z b/z/z])
 
-        expect(%w[z/a/z z/b/z].sort(&described_class::TAP_AND_NAME_COMPARISON)).to eq(%w[z/a/z z/b/z])
-        expect(%w[z/b/z z/a/z].sort(&described_class::TAP_AND_NAME_COMPARISON)).to eq(%w[z/a/z z/b/z])
+        expect(%w[z/a/z z/b/z].sort(&Cask::List::TAP_AND_NAME_COMPARISON)).to eq(%w[z/a/z z/b/z])
+        expect(%w[z/b/z z/a/z].sort(&Cask::List::TAP_AND_NAME_COMPARISON)).to eq(%w[z/a/z z/b/z])
 
-        expect(%w[z/z/a z/z/b].sort(&described_class::TAP_AND_NAME_COMPARISON)).to eq(%w[z/z/a z/z/b])
-        expect(%w[z/z/b z/z/a].sort(&described_class::TAP_AND_NAME_COMPARISON)).to eq(%w[z/z/a z/z/b])
+        expect(%w[z/z/a z/z/b].sort(&Cask::List::TAP_AND_NAME_COMPARISON)).to eq(%w[z/z/a z/z/b])
+        expect(%w[z/z/b z/z/a].sort(&Cask::List::TAP_AND_NAME_COMPARISON)).to eq(%w[z/z/a z/z/b])
       end
     end
 
     describe "only one string includes tap" do
       it "prefers the string without tap" do
-        expect(%w[a/z/z z].sort(&described_class::TAP_AND_NAME_COMPARISON)).to eq(%w[z a/z/z])
-        expect(%w[z a/z/z].sort(&described_class::TAP_AND_NAME_COMPARISON)).to eq(%w[z a/z/z])
+        expect(%w[a/z/z z].sort(&Cask::List::TAP_AND_NAME_COMPARISON)).to eq(%w[z a/z/z])
+        expect(%w[z a/z/z].sort(&Cask::List::TAP_AND_NAME_COMPARISON)).to eq(%w[z a/z/z])
       end
     end
   end

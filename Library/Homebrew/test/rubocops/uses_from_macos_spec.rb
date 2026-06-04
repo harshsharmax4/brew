@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/uses_from_macos"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::UsesFromMacos do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::UsesFromMacos }
 
   context "when auditing `uses_from_macos` dependencies" do
     it "reports an offense when used on non-macOS dependency" do
@@ -49,5 +51,5 @@ RSpec.describe RuboCop::Cop::FormulaAudit::UsesFromMacos do
     end
   end
 
-  include_examples "formulae exist", described_class::ALLOWED_USES_FROM_MACOS_DEPS
+  include_examples "formulae exist", RuboCop::Cop::FormulaAudit::UsesFromMacos::ALLOWED_USES_FROM_MACOS_DEPS
 end

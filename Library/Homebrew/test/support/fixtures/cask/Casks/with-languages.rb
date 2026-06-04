@@ -15,5 +15,7 @@ cask "with-languages" do
   url "file://#{TEST_FIXTURE_DIR}/cask/caffeine.zip"
   homepage "https://brew.sh/"
 
+  depends_on macos: :catalina
+
   app "Caffeine.app"
 end

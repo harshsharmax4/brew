@@ -4,6 +4,8 @@
 require "keg_relocate"
 
 RSpec.describe Keg::Relocation do
+  let(:klass) { Keg::Relocation }
+
   let(:prefix) { HOMEBREW_PREFIX.to_s }
   let(:cellar) { HOMEBREW_CELLAR.to_s }
   let(:repository) { HOMEBREW_REPOSITORY.to_s }
@@ -16,7 +18,7 @@ RSpec.describe Keg::Relocation do
   let(:escaped_cellar) { /(?:(?<=-F|-I|-L|-isystem)|(?<![a-zA-Z0-9]))#{HOMEBREW_CELLAR}/o }
 
   def setup_relocation
-    relocation = described_class.new
+    relocation = klass.new
     relocation.add_replacement_pair :prefix, prefix, prefix_placeholder, path: true
     relocation.add_replacement_pair :cellar, /#{cellar}/o, cellar_placeholder, path: true
     relocation.add_replacement_pair :repository_placeholder, repository_placeholder, repository
@@ -60,9 +62,9 @@ RSpec.describe Keg::Relocation do
   end
 
   specify "::path_to_regex" do
-    expect(described_class.path_to_regex(prefix)).to eq escaped_prefix
-    expect(described_class.path_to_regex("foo.bar")).to eq(/(?:(?<=-F|-I|-L|-isystem)|(?<![a-zA-Z0-9]))foo\.bar/)
-    expect(described_class.path_to_regex(/#{cellar}/o)).to eq escaped_cellar
-    expect(described_class.path_to_regex(/foo.bar/)).to eq(/(?:(?<=-F|-I|-L|-isystem)|(?<![a-zA-Z0-9]))foo.bar/)
+    expect(klass.path_to_regex(prefix)).to eq escaped_prefix
+    expect(klass.path_to_regex("foo.bar")).to eq(/(?:(?<=-F|-I|-L|-isystem)|(?<![a-zA-Z0-9]))foo\.bar/)
+    expect(klass.path_to_regex(/#{cellar}/o)).to eq escaped_cellar
+    expect(klass.path_to_regex(/foo.bar/)).to eq(/(?:(?<=-F|-I|-L|-isystem)|(?<![a-zA-Z0-9]))foo.bar/)
   end
 end

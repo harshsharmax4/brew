@@ -106,6 +106,9 @@ module Homebrew
                                  "formulae dependents step."
         comma_array "--tested-formulae=",
                     description: "Use these tested formulae from formulae steps for a formulae dependents step."
+        flag   "--formulae-dependents-shard=",
+               description: "Only test the formulae dependents in the given <SHARD/TOTAL>.",
+               hidden:      true
         conflicts "--only-formulae-detect", "--testing-formulae"
         conflicts "--only-formulae-detect", "--added-formulae"
         conflicts "--only-formulae-detect", "--deleted-formulae"

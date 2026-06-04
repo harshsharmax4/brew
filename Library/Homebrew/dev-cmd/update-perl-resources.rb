@@ -13,6 +13,7 @@ module Homebrew
         EOS
         switch "-p", "--print-only",
                description: "Print the updated resource blocks instead of changing <formula>."
+        # odeprecated: replace with `--quiet` in a future release.
         switch "-s", "--silent",
                description: "Suppress any output."
         switch "--ignore-errors",
@@ -23,6 +24,8 @@ module Homebrew
 
       sig { override.void }
       def run
+        Homebrew.install_bundler_gems!(groups: ["ast"])
+
         args.named.to_formulae.each do |formula|
           CPAN.update_perl_resources! formula,
                                       print_only:    args.print_only?,

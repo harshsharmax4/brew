@@ -4,6 +4,8 @@
 require_relative "shared_examples"
 
 RSpec.describe UnpackStrategy::Zstd do
+  let(:klass) { UnpackStrategy::Zstd }
+
   let(:path) { TEST_FIXTURE_DIR/"cask/container.tar.zst" }
 
   it "is correctly detected" do
@@ -12,6 +14,6 @@ RSpec.describe UnpackStrategy::Zstd do
     # such as `UnpackStrategy::Zstd`. On macOS `UnpackStrategy.detect("container.tar.zst")`
     # returns `UnpackStrategy::Zstd` and on Ubuntu 22.04 it returns `UnpackStrategy::Tar`,
     # because the host's version of `tar` is recent enough and `zstd` is installed.
-    expect(UnpackStrategy.detect(path)).to(be_a(described_class).or(be_a(UnpackStrategy::Tar)))
+    expect(UnpackStrategy.detect(path)).to(be_a(klass).or(be_a(UnpackStrategy::Tar)))
   end
 end

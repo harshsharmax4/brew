@@ -1,32 +1,16 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "livecheck/strategy"
 require "bundle_version"
 
 RSpec.describe Homebrew::Livecheck::Strategy::Sparkle do
-  subject(:sparkle) { described_class }
+  subject(:sparkle) { klass }
 
-  def create_appcast_xml(items_str = "")
-    <<~EOS
-      <?xml version="1.0" encoding="utf-8"?>
-      <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-        <channel>
-          <title>Example Changelog</title>
-          <link>#{appcast_url}</link>
-          <description>Most recent changes with links to updates.</description>
-          <language>en</language>
-          #{items_str}
-        </channel>
-      </rss>
-    EOS
-  end
-
+  let(:klass) { Homebrew::Livecheck::Strategy::Sparkle }
   let(:appcast_url) { "https://www.example.com/example/appcast.xml" }
   let(:non_http_url) { "ftp://brew.sh/" }
-
   let(:title_regex) { /Version\s+v?(\d+(?:\.\d+)+)\s*$/i }
-
   # The `item_hashes` data is used to create test appcast XML and expected
   # `Sparkle::Item` objects.
   let(:item_hashes) do
@@ -82,7 +66,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Sparkle do
       },
     }
   end
-
   let(:xml) do
     v123_item = <<~EOS
       <item>
@@ -188,7 +171,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Sparkle do
       undefined_namespace:,
     }
   end
-
   let(:items) do
     {
       v124: Homebrew::Livecheck::Strategy::Sparkle::Item.new(
@@ -253,7 +235,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Sparkle do
       ),
     }
   end
-
   let(:item_arrays) do
     item_arrays = {
       appcast:        [
@@ -295,8 +276,22 @@ RSpec.describe Homebrew::Livecheck::Strategy::Sparkle do
 
     item_arrays
   end
-
   let(:matches) { ["1.2.3,123"] }
+
+  def create_appcast_xml(items_str = "")
+    <<~EOS
+      <?xml version="1.0" encoding="utf-8"?>
+      <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+        <channel>
+          <title>Example Changelog</title>
+          <link>#{appcast_url}</link>
+          <description>Most recent changes with links to updates.</description>
+          <language>en</language>
+          #{items_str}
+        </channel>
+      </rss>
+    EOS
+  end
 
   describe "::match?" do
     it "returns true for an HTTP URL" do

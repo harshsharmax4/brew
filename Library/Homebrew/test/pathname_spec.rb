@@ -1,16 +1,27 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "extend/pathname"
 require "install_renamed"
 
 RSpec.describe Pathname do
-  include FileUtils
-
+  let(:klass) { Pathname }
   let(:src) { mktmpdir }
   let(:dst) { mktmpdir }
   let(:file) { src/"foo" }
   let(:dir) { src/"bar" }
+
+  include FileUtils
+
+  describe EagerInitializeExtension do
+    it "defines the lazy memoised ivars on every new Pathname" do
+      pathname = Pathname.new(file.to_s)
+      [:@magic_number, :@file_type, :@zipinfo, :@which_install_info, :@disk_usage, :@file_count].each do |ivar|
+        expect(pathname.instance_variable_defined?(ivar)).to be(true), "expected #{ivar} to be defined"
+        expect(pathname.instance_variable_get(ivar)).to be_nil
+      end
+    end
+  end
 
   describe DiskUsageExtension do
     before do
@@ -123,12 +134,12 @@ RSpec.describe Pathname do
 
   describe "#extname" do
     specify do
-      expect(described_class.new("foo-0.1.tar.gz").extname).to eq(".tar.gz")
-      expect(described_class.new("foo-0.1.cpio.gz").extname).to eq(".cpio.gz")
-      expect(described_class.new("foo-0.1").extname).to eq("")
-      expect(described_class.new("foo-1.0-rc1").extname).to eq("")
-      expect(described_class.new("foo-1.2.3").extname).to eq ""
-      expect(described_class.new("snap7-full-1.4.2.7z").extname).to eq ".7z"
+      expect(klass.new("foo-0.1.tar.gz").extname).to eq(".tar.gz")
+      expect(klass.new("foo-0.1.cpio.gz").extname).to eq(".cpio.gz")
+      expect(klass.new("foo-0.1").extname).to eq("")
+      expect(klass.new("foo-1.0-rc1").extname).to eq("")
+      expect(klass.new("foo-1.2.3").extname).to eq ""
+      expect(klass.new("snap7-full-1.4.2.7z").extname).to eq ".7z"
     end
   end
 
@@ -229,21 +240,23 @@ RSpec.describe Pathname do
 
     it "can install relative paths as symlinks" do
       dst.install_symlink "foo" => "bar"
-      expect((dst/"bar").readlink).to eq(described_class.new("foo"))
+      expect((dst/"bar").readlink).to eq(klass.new("foo"))
     end
 
     it "can install relative symlinks in a symlinked directory" do
       mkdir_p dst/"1/2"
       dst.install_symlink "1/2" => "12"
-      expect((dst/"12").readlink).to eq(described_class.new("1/2"))
+      expect((dst/"12").readlink).to eq(klass.new("1/2"))
       (dst/"12").install_symlink dst/"foo"
-      expect((dst/"12/foo").readlink).to eq(described_class.new("../../foo"))
+      expect((dst/"12/foo").readlink).to eq(klass.new("../../foo"))
     end
   end
 
   describe InstallRenamed do
+    let(:klass) { InstallRenamed }
+
     before do
-      dst.extend(described_class)
+      dst.extend(klass)
     end
 
     it "renames the installed file if it already exists" do

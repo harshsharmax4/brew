@@ -310,10 +310,10 @@ module Homebrew
       sig { params(value: T.untyped).returns(T::Array[String]) }
       def self.handle_block_return(value)
         case value
-        when String
-          [value]
+        when String, Version
+          [value.to_s]
         when Array
-          value.compact.uniq
+          value.compact.map(&:to_s).uniq
         when nil
           []
         else
@@ -342,6 +342,7 @@ require_relative "strategy/launchpad"
 require_relative "strategy/npm"
 require_relative "strategy/page_match"
 require_relative "strategy/pypi"
+require_relative "strategy/ruby_gems"
 require_relative "strategy/sourceforge"
 require_relative "strategy/sparkle"
 require_relative "strategy/xml"

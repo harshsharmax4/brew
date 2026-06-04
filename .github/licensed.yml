@@ -1,0 +1,40 @@
+sources:
+  bundler: true
+
+source_path: Library/Homebrew
+
+bundler:
+  # Licensed treats an empty value as its default development/test exclusion.
+  without: __licensed_none__
+
+stale_records_action: error
+
+allowed:
+  - apache-2.0
+  - bsd-2-clause
+  - bsd-3-clause
+  - isc
+  - mit
+  - ruby
+  - wtfpl
+
+reviewed:
+  bundler:
+    - base64
+    - benchmark
+    - bigdecimal
+    - coderay
+    - concurrent-ruby
+    - diff-lcs
+    - drb
+    - io-console
+    - json
+    - kramdown
+    - logger
+    - ostruct
+    - parser
+    - racc
+    - rbs
+    - reline
+    - ruby-progressbar
+    - tsort

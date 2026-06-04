@@ -5,6 +5,8 @@ require "language/php"
 require "utils/shebang"
 
 RSpec.describe Language::PHP::Shebang do
+  let(:klass) { Language::PHP::Shebang }
+
   let(:file) { Tempfile.new("php-shebang") }
   let(:broken_file) { Tempfile.new("php-shebang") }
   let(:f) do
@@ -57,7 +59,7 @@ RSpec.describe Language::PHP::Shebang do
   describe "#detected_php_shebang" do
     it "can be used to replace PHP shebangs" do
       allow(Formulary).to receive(:factory).with(f[:php81].name).and_return(f[:php81])
-      Utils::Shebang.rewrite_shebang described_class.detected_php_shebang(f[:versioned_php_dep]), file.path
+      Utils::Shebang.rewrite_shebang klass.detected_php_shebang(f[:versioned_php_dep]), file.path
 
       expect(File.read(file)).to eq <<~EOS
         #!#{HOMEBREW_PREFIX/"opt/php@8.1/bin/php"}
@@ -69,7 +71,7 @@ RSpec.describe Language::PHP::Shebang do
 
     it "can fix broken shebang like `#!php`" do
       allow(Formulary).to receive(:factory).with(f[:php81].name).and_return(f[:php81])
-      Utils::Shebang.rewrite_shebang described_class.detected_php_shebang(f[:versioned_php_dep]), broken_file.path
+      Utils::Shebang.rewrite_shebang klass.detected_php_shebang(f[:versioned_php_dep]), broken_file.path
 
       expect(File.read(broken_file)).to eq <<~EOS
         #!#{HOMEBREW_PREFIX/"opt/php@8.1/bin/php"}
@@ -80,12 +82,12 @@ RSpec.describe Language::PHP::Shebang do
     end
 
     it "errors if formula doesn't depend on PHP" do
-      expect { Utils::Shebang.rewrite_shebang described_class.detected_php_shebang(f[:no_deps]), file.path }
+      expect { Utils::Shebang.rewrite_shebang klass.detected_php_shebang(f[:no_deps]), file.path }
         .to raise_error(ShebangDetectionError, "Cannot detect PHP shebang: formula does not depend on PHP.")
     end
 
     it "errors if formula depends on more than one php" do
-      expect { Utils::Shebang.rewrite_shebang described_class.detected_php_shebang(f[:multiple_deps]), file.path }
+      expect { Utils::Shebang.rewrite_shebang klass.detected_php_shebang(f[:multiple_deps]), file.path }
         .to raise_error(ShebangDetectionError, "Cannot detect PHP shebang: formula has multiple PHP dependencies.")
     end
   end

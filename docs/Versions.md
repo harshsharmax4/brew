@@ -38,7 +38,7 @@ If you want something else, choose the smallest tool that fits:
 
 ### `brew pin`
 
-Use `brew pin <formula>` when you want `brew upgrade` to stop upgrading a formula you already have installed.
+Use `brew pin <formula_or_cask>` when you want `brew upgrade` to stop upgrading a package you already have installed.
 
 Pros:
 
@@ -46,8 +46,9 @@ Pros:
 
 Cons:
 
-* you will not receive updates for that formula, including security updates, while it remains pinned
+* you will not receive updates for that package, including security updates, while it remains pinned
 * pinned formulae can block installs or upgrades when other formulae require a newer version
+* pinned casks may still update themselves outside Homebrew
 
 ### `$HOMEBREW_NO_AUTO_UPDATE`
 

@@ -4,8 +4,9 @@
 require "livecheck/options"
 
 RSpec.describe Homebrew::Livecheck::Options do
-  subject(:options) { described_class }
+  subject(:options) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Options }
   let(:cookies) { { "cookie_key" => "cookie_value" } }
   let(:header_string) { "Accept: */*" }
   let(:referer_url) { "https://example.com/referer" }
@@ -17,7 +18,6 @@ RSpec.describe Homebrew::Livecheck::Options do
       string:  "a + b = c",
     }
   end
-
   let(:args) do
     {
       cookies:       cookies,
@@ -35,7 +35,6 @@ RSpec.describe Homebrew::Livecheck::Options do
     }
   end
   let(:merged_hash) { args.merge(other_args) }
-
   let(:base_options) { options.new(**args) }
   let(:other_options) { options.new(**other_args) }
   let(:merged_options) { options.new(**merged_hash) }

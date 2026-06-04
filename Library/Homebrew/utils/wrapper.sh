@@ -4,7 +4,7 @@
 # HOMEBREW_FORCE_BREW_WRAPPER is set by the user environment.
 # shellcheck disable=SC2154
 odie-with-wrapper-message() {
-  source "${HOMEBREW_LIBRARY}/Homebrew/utils/helpers.sh"
+  source "${HOMEBREW_LIBRARY}/Homebrew/utils.sh"
 
   local CUSTOM_MESSAGE="${1}"
   local HOMEBREW_FORCE_BREW_WRAPPER_WITHOUT_BREW="${HOMEBREW_FORCE_BREW_WRAPPER%/brew}"
@@ -69,7 +69,7 @@ check-brew-wrapper() {
 
     if ((HOMEBREW_BREW_CALLER_CHECK_EXIT_CODE != 0))
     then
-      source "${HOMEBREW_LIBRARY}/Homebrew/utils/helpers.sh"
+      source "${HOMEBREW_LIBRARY}/Homebrew/utils.sh"
       # Error message already printed above when populating `HOMEBREW_BREW_CALLER`.
       odie "failed to check the path to the parent process!"
     fi

@@ -322,7 +322,18 @@ module Homebrew
       args = ["--language-dialect", "bash", "--indent", "2", "--case-indent", "--", *files]
       args.unshift("--write") if fix # need to add before "--"
 
-      system shfmt, *args
+      require "formula"
+      shfmt_executable = T.cast(
+        Formula["shfmt"].ensure_installed!(latest:     true,
+                                           reason:     "formatting shell scripts",
+                                           executable: "shfmt"),
+        Pathname,
+      )
+      system(
+        { "HOMEBREW_SHFMT" => shfmt_executable.to_s },
+        shfmt,
+        *args,
+      )
       $CHILD_STATUS.success?
     end
 
@@ -391,20 +402,23 @@ module Homebrew
     sig { returns(Pathname) }
     def self.shellcheck
       require "formula"
-      Formula["shellcheck"].ensure_installed!(latest: true, reason: "shell style checks").opt_bin/"shellcheck"
+      T.cast(Formula["shellcheck"].ensure_installed!(latest:     true,
+                                                     reason:     "shell style checks",
+                                                     executable: "shellcheck"), Pathname)
     end
 
     sig { returns(Pathname) }
     def self.shfmt
-      require "formula"
-      Formula["shfmt"].ensure_installed!(latest: true, reason: "formatting shell scripts")
       HOMEBREW_LIBRARY/"Homebrew/utils/shfmt.sh"
     end
 
     sig { returns(Pathname) }
     def self.actionlint
       require "formula"
-      Formula["actionlint"].ensure_installed!(latest: true, reason: "GitHub Actions checks").opt_bin/"actionlint"
+      T.cast(Formula["actionlint"].ensure_installed!(latest:       true,
+                                                     reason:       "GitHub Actions checks",
+                                                     executable:   "actionlint",
+                                                     version_args: ["-version"]), Pathname)
     end
 
     # Collection of style offenses.

@@ -43,7 +43,16 @@ module OS
 
     sig { returns(T::Boolean) }
     def self.wsl?
-      /-microsoft/i.match?(OS.kernel_version.to_s)
+      OS.wsl?
+    end
+
+    sig { returns(T::Boolean) }
+    def self.inside_docker?
+      return true if File.file?("/.dockerenv")
+      return true if File.file?("/run/.containerenv")
+      return false unless File.file?("/proc/1/cgroup")
+
+      File.read("/proc/1/cgroup").match?(/azpl_job|actions_job|docker|garden|kubepods/)
     end
 
     sig { returns(Version) }

@@ -4,10 +4,13 @@
 require "api"
 
 RSpec.describe Homebrew::API::FormulaStruct do
+  let(:klass) { Homebrew::API::FormulaStruct }
+
   describe "#serialize_bottle" do
     def build_formula_struct(checksums)
       Homebrew::API::FormulaStruct.new(
         desc:                 "sample formula",
+        executables:          ["sample"],
         homepage:             "https://example.com",
         license:              "MIT",
         ruby_source_checksum: "abc123",
@@ -81,22 +84,22 @@ RSpec.describe Homebrew::API::FormulaStruct do
 
   describe "::format_arg_pair" do
     specify(:aggregate_failures) do
-      expect(described_class.format_arg_pair(["foo"], last: {})).to eq ["foo", {}]
-      expect(described_class.format_arg_pair([{ "foo" => :build }], last: {}))
+      expect(klass.format_arg_pair(["foo"], last: {})).to eq ["foo", {}]
+      expect(klass.format_arg_pair([{ "foo" => :build }], last: {}))
         .to eq [{ "foo" => :build }, {}]
-      expect(described_class.format_arg_pair([{ "foo" => :build, since: :catalina }], last: {}))
+      expect(klass.format_arg_pair([{ "foo" => :build, since: :catalina }], last: {}))
         .to eq [{ "foo" => :build, since: :catalina }, {}]
-      expect(described_class.format_arg_pair(["foo", { since: :catalina }], last: {}))
+      expect(klass.format_arg_pair(["foo", { since: :catalina }], last: {}))
         .to eq ["foo", { since: :catalina }]
 
-      expect(described_class.format_arg_pair([:foo], last: nil)).to eq [:foo, nil]
-      expect(described_class.format_arg_pair([:foo, :bar], last: nil)).to eq [:foo, :bar]
+      expect(klass.format_arg_pair([:foo], last: nil)).to eq [:foo, nil]
+      expect(klass.format_arg_pair([:foo, :bar], last: nil)).to eq [:foo, :bar]
     end
   end
 
   describe "predicate methods" do
     it "defaults all predicates to false when not set" do
-      struct = described_class.new(
+      struct = klass.new(
         desc:                 "test",
         homepage:             "https://example.com",
         license:              "MIT",
@@ -115,7 +118,7 @@ RSpec.describe Homebrew::API::FormulaStruct do
         [:"#{predicate}_present", true]
       end
 
-      struct = described_class.new(
+      struct = klass.new(
         desc:                 "test",
         homepage:             "https://example.com",
         license:              "MIT",
@@ -136,6 +139,7 @@ RSpec.describe Homebrew::API::FormulaStruct do
       bottle_tag = Utils::Bottles::Tag.from_symbol(:arm64_sequoia)
       hash = {
         "desc"                 => "test formula",
+        "executables"          => ["foo"],
         "homepage"             => "https://example.com",
         "license"              => "MIT",
         "ruby_source_checksum" => "abc123",
@@ -145,10 +149,11 @@ RSpec.describe Homebrew::API::FormulaStruct do
         "bottle_cellar"        => ":any",
       }
 
-      struct = described_class.deserialize(hash, bottle_tag:)
+      struct = klass.deserialize(hash, bottle_tag:)
 
       expect(struct.bottle?).to be(true)
       expect(struct.bottle_checksums).to eq([{ cellar: :any, arm64_sequoia: "checksum1" }])
+      expect(struct.executables).to eq(["foo"])
     end
 
     it "sets bottle_present to false when no bottle_checksum is present" do
@@ -161,7 +166,7 @@ RSpec.describe Homebrew::API::FormulaStruct do
         "stable_version"       => "1.0.0",
       }
 
-      struct = described_class.deserialize(hash, bottle_tag:)
+      struct = klass.deserialize(hash, bottle_tag:)
 
       expect(struct.bottle?).to be(false)
       expect(struct.bottle_checksums).to eq([])
@@ -179,7 +184,7 @@ RSpec.describe Homebrew::API::FormulaStruct do
         "keg_only_args"        => [":versioned_formula"],
       }
 
-      struct = described_class.deserialize(hash, bottle_tag:)
+      struct = klass.deserialize(hash, bottle_tag:)
 
       expect(struct.deprecate?).to be(true)
       expect(struct.keg_only?).to be(true)
@@ -197,7 +202,7 @@ RSpec.describe Homebrew::API::FormulaStruct do
         "stable_url_args"      => ["https://example.com/foo-1.0.tar.gz"],
       }
 
-      struct = described_class.deserialize(hash, bottle_tag:)
+      struct = klass.deserialize(hash, bottle_tag:)
 
       expect(struct.stable?).to be(true)
       expect(struct.stable_url_args).to eq(["https://example.com/foo-1.0.tar.gz", {}])
@@ -215,7 +220,7 @@ RSpec.describe Homebrew::API::FormulaStruct do
         "stable_uses_from_macos" => [["zlib"]],
       }
 
-      struct = described_class.deserialize(hash, bottle_tag:)
+      struct = klass.deserialize(hash, bottle_tag:)
 
       expect(struct.stable_uses_from_macos).to eq([["zlib", {}]])
     end
@@ -231,7 +236,7 @@ RSpec.describe Homebrew::API::FormulaStruct do
         "service_args"         => [[":run_type", ":immediate"]],
       }
 
-      struct = described_class.deserialize(hash, bottle_tag:)
+      struct = klass.deserialize(hash, bottle_tag:)
 
       expect(struct.service?).to be(true)
       expect(struct.service_args).to eq([[:run_type, :immediate]])
@@ -248,7 +253,7 @@ RSpec.describe Homebrew::API::FormulaStruct do
         "conflicts"            => [["other-formula"]],
       }
 
-      struct = described_class.deserialize(hash, bottle_tag:)
+      struct = klass.deserialize(hash, bottle_tag:)
 
       expect(struct.conflicts).to eq([["other-formula", {}]])
     end
@@ -258,7 +263,7 @@ RSpec.describe Homebrew::API::FormulaStruct do
     it "reconstructs an equivalent struct after serialize then deserialize", :needs_macos do
       bottle_tag = Utils::Bottles::Tag.from_symbol(:arm64_sequoia)
 
-      original = described_class.new(
+      original = klass.new(
         desc:                   "round-trip test",
         homepage:               "https://example.com",
         license:                "MIT",
@@ -267,6 +272,7 @@ RSpec.describe Homebrew::API::FormulaStruct do
         stable_present:         true,
         stable_url_args:        ["https://example.com/foo-1.0.tar.gz", {}],
         stable_dependencies:    ["dep1", { "dep2" => :build }],
+        executables:            ["foo"],
         stable_uses_from_macos: [["zlib", {}]],
         bottle_present:         true,
         bottle_checksums:       [{ cellar: :any, arm64_sequoia: "checksum1" }],
@@ -277,9 +283,27 @@ RSpec.describe Homebrew::API::FormulaStruct do
       )
 
       serialized = original.serialize(bottle_tag:)
-      restored = described_class.deserialize(serialized, bottle_tag:)
+      restored = klass.deserialize(serialized, bottle_tag:)
 
       expect(restored).to eq(original)
+    end
+
+    it "serializes post-install steps", :needs_macos do
+      original = klass.new(
+        desc:                 "install steps test",
+        homepage:             "https://example.com",
+        license:              "MIT",
+        ruby_source_checksum: "abc123",
+        stable_version:       "1.0.0",
+        post_install_steps:   [
+          { "type" => "mkdir_p", "path" => { "base" => "var", "path" => "log/foo" } },
+        ],
+      )
+
+      serialized = original.serialize(bottle_tag: Utils::Bottles::Tag.from_symbol(:arm64_sequoia))
+      restored = klass.deserialize(serialized, bottle_tag: Utils::Bottles::Tag.from_symbol(:arm64_sequoia))
+
+      expect(restored.post_install_steps).to eq(original.post_install_steps)
     end
   end
 end

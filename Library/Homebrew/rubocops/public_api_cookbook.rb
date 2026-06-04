@@ -11,9 +11,13 @@ module RuboCop
       # definitions.
       #
       # Both cookbook method lists live in {ApiAnnotationHelper} and are
-      # validated by `.github/check_cookbook_method_lists.rb` in CI.
+      # validated by this cop.
       class PublicApiCookbook < Base
         MSG = "Method `%<method>s` is referenced in the %<cookbook>s but is not annotated with `@api public`."
+        MISSING_FORMULA_LIST_MSG = "Formula Cookbook references methods missing from " \
+                                   "`FORMULA_COOKBOOK_METHODS`: %<methods>s."
+        MISSING_CASK_LIST_MSG = "Method `%<method>s` is annotated with `@api public` in `%<file>s` but is " \
+                                "missing from `CASK_COOKBOOK_METHODS`."
 
         sig { void }
         def on_new_investigation
@@ -23,12 +27,61 @@ module RuboCop
           return if file_path.nil?
 
           relative_path = file_path.sub(%r{.*/Library/Homebrew/}, "")
+
+          if relative_path == "rubocops/shared/api_annotation_helper.rb"
+            missing_formula = (HOMEBREW_LIBRARY_PATH.parent.parent/"docs/Formula-Cookbook.md").read
+                              .scan(
+                                %r{/rubydoc/\w+(?:/\w+)*\.html#(\w+[!?]?)-(?:class|instance)_method},
+                              )
+                              .flatten -
+                              ApiAnnotationHelper::FORMULA_COOKBOOK_METHODS.keys
+            missing_formula.sort!
+
+            if missing_formula.any?
+              add_offense(
+                processed_source.ast&.each_descendant(:casgn)&.find do |node|
+                  node.const_name == "FORMULA_COOKBOOK_METHODS"
+                end || processed_source.ast || processed_source.buffer.source_range,
+                message: format(
+                  MISSING_FORMULA_LIST_MSG,
+                  methods: missing_formula.map { |method| "`#{method}`" }.join(", "),
+                ),
+              )
+            end
+
+            return
+          end
+
           api_public_targets = build_api_public_targets
 
           check_cookbook_methods(ApiAnnotationHelper::FORMULA_COOKBOOK_METHODS,
                                  "Formula Cookbook", relative_path, api_public_targets)
           check_cookbook_methods(ApiAnnotationHelper::CASK_COOKBOOK_METHODS,
                                  "Cask Cookbook", relative_path, api_public_targets)
+
+          return unless %w[cask/dsl.rb cask/cask.rb cask/dsl/version.rb].include?(relative_path)
+
+          cookbook_methods = ApiAnnotationHelper::CASK_COOKBOOK_METHODS.keys.to_set
+          lines = processed_source.lines
+
+          processed_source.comments.each do |comment|
+            next unless ["# @api public", "@api public"].include?(comment.text.strip)
+
+            (1..5).each do |offset|
+              target_line = lines[comment.loc.line - 1 + offset]&.strip
+              break if target_line.blank?
+
+              match = target_line.match(/\A(?:def\s+(?:self\.)?|attr_reader\s+:|attr_accessor\s+:)(\w+[!?]?)/) ||
+                      target_line.match(/\Adelegate\s+(\w+[!?]?):/)
+              next if match.nil?
+
+              method_name = match[1].to_s
+              break if cookbook_methods.include?(method_name)
+
+              add_offense(comment, message: format(MISSING_CASK_LIST_MSG, method: method_name, file: relative_path))
+              break
+            end
+          end
         end
 
         private
@@ -37,7 +90,7 @@ module RuboCop
         # preceded by an `@api public` annotation in their doc block.
         # Walks forward from each `@api public` comment to find the next
         # def/attr_reader/delegate, matching only the immediately following
-        # definition — not one 20 lines away.
+        # definition; not one 20 lines away.
         sig { returns(T::Set[Integer]) }
         def build_api_public_targets
           targets = T.let(Set.new, T::Set[Integer])

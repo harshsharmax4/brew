@@ -21,6 +21,7 @@ cask "everything" do
   auto_updates true
   conflicts_with cask: "nothing"
   depends_on cask: "something"
+  depends_on macos: :catalina
   container type: :naked
 
   rename "Foobar.app", "Foo.app"

@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/text"
 
 RSpec.describe RuboCop::Cop::FormulaAuditStrict::Text do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAuditStrict::Text }
 
   context "when auditing formula text in homebrew/core" do
     it "reports an offense if `env :userpaths` is present" do

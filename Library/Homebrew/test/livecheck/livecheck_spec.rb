@@ -4,8 +4,9 @@
 require "livecheck/livecheck"
 
 RSpec.describe Homebrew::Livecheck do
-  subject(:livecheck) { described_class }
+  subject(:livecheck) { klass }
 
+  let(:klass) { Homebrew::Livecheck }
   let(:cask_url) { "https://brew.sh/test-0.0.1.dmg" }
   let(:head_url) { "https://github.com/Homebrew/brew.git" }
   let(:homepage_url) { "https://brew.sh" }
@@ -13,7 +14,6 @@ RSpec.describe Homebrew::Livecheck do
   let(:stable_url) { "https://brew.sh/test-0.0.1.tgz" }
   let(:resource_url) { "https://brew.sh/foo-1.0.tar.gz" }
   let(:brew_regex) { /href=.*?test[._-]v?(\d+(?:\.\d+)+)\.(?:t|dmg)/i }
-
   let(:f) do
     formula("test") do
       desc "Test formula"
@@ -37,7 +37,6 @@ RSpec.describe Homebrew::Livecheck do
       end
     end
   end
-
   let(:f_stable_url_only) do
     stable_url_s = stable_url
 
@@ -46,9 +45,7 @@ RSpec.describe Homebrew::Livecheck do
       url stable_url_s
     end
   end
-
   let(:r) { f.resources.first }
-
   let(:c) do
     Cask::CaskLoader.load(+<<-RUBY)
       cask "test" do
@@ -66,7 +63,6 @@ RSpec.describe Homebrew::Livecheck do
       end
     RUBY
   end
-
   let(:c_no_checkable_urls) do
     Cask::CaskLoader.load(+<<-RUBY)
       cask "test_no_checkable_urls" do

@@ -102,6 +102,9 @@ class DependencyCollector
   sig { params(related_formula_names: T::Set[String]).returns(T.nilable(Dependency)) }
   def glibc_dep_if_needed(related_formula_names); end
 
+  sig { params(related_formula_names: T::Set[String]).returns(T.nilable(Dependency)) }
+  def bubblewrap_dep_if_needed(related_formula_names); end
+
   sig { params(tags: T::Array[T.any(String, Symbol)]).returns(T.nilable(Dependency)) }
   def git_dep_if_needed(tags)
     require "utils/git"

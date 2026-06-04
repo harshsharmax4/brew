@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "livecheck/strategy"
@@ -6,13 +6,12 @@ require "rexml/document"
 require "rexml/undefinednamespaceexception"
 
 RSpec.describe Homebrew::Livecheck::Strategy::Xml do
-  subject(:xml) { described_class }
+  subject(:xml) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Strategy::Xml }
   let(:http_url) { "https://brew.sh/blog/" }
   let(:non_http_url) { "ftp://brew.sh/" }
-
   let(:regex) { /^v?(\d+(?:\.\d+)+)$/i }
-
   let(:content_version_text) do
     <<~EOS
       <?xml version="1.0" encoding="utf-8"?>
@@ -39,7 +38,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Xml do
       </versions>
     EOS
   end
-
   let(:content_version_attr) do
     <<~EOS
       <?xml version="1.0" encoding="utf-8"?>
@@ -66,21 +64,18 @@ RSpec.describe Homebrew::Livecheck::Strategy::Xml do
       </items>
     EOS
   end
-
   let(:content_simple) do
     <<~EOS
       <?xml version="1.0" encoding="utf-8"?>
       <version>1.2.3</version>
     EOS
   end
-
   let(:content_undefined_namespace) do
     <<~EOS
       <?xml version="1.0" encoding="utf-8"?>
       <something:version>1.2.3</something:version>
     EOS
   end
-
   let(:parent_child_text) { { parent: "1.2.3", child: "4.5.6" } }
   let(:content_parent_child) do
     # This XML deliberately includes unnecessary whitespace, to ensure that
@@ -98,7 +93,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Xml do
       </elements>
     EOS
   end
-
   let(:matches) do
     {
       content: ["1.1.2", "1.1.1", "1.1.0", "1.0.3", "1.0.2", "1.0.1", "1.0.0"],

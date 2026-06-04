@@ -28,17 +28,16 @@ module OS
 
       sig { params(spec: SoftwareSpec).void }
       def add_global_deps_to_spec(spec)
-        return unless ::DevelopmentTools.needs_build_formulae?
-
         @global_deps ||= T.let(nil, T.nilable(T::Array[Dependency]))
         @global_deps ||= begin
           dependency_collector = spec.dependency_collector
-          related_formula_names = Set.new([
-            name,
-            *aliases,
-            *versioned_formulae_names,
-          ])
+          related_formula_names = Set[name]
+          if ::DevelopmentTools.needs_build_formulae? || ::DevelopmentTools.needs_libc_formula?
+            related_formula_names.merge(aliases)
+            related_formula_names.merge(versioned_formulae_names)
+          end
           [
+            dependency_collector.bubblewrap_dep_if_needed(related_formula_names),
             dependency_collector.gcc_dep_if_needed(related_formula_names),
             dependency_collector.glibc_dep_if_needed(related_formula_names),
           ].compact.freeze

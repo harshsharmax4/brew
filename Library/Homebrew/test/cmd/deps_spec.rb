@@ -1,4 +1,4 @@
-# typed: false
+# typed: strict
 # frozen_string_literal: true
 
 require "cmd/deps"
@@ -38,7 +38,9 @@ RSpec.describe Homebrew::Cmd::Deps, :integration_test, :no_api do
 
   it "outputs all of a Formula's dependencies and their dependencies on separate lines" do
     setup_test_formula "installed"
-    expect { brew "deps", "baz", "--include-test", "--missing", "--skip-recommended" }
+    expect do
+      brew "deps", "baz", "--include-test", "--missing", "--skip-recommended", "HOMEBREW_REQUIRE_TAP_TRUST" => "1"
+    end
       .to be_a_success
       .and output("bar\nfoo\ntest\n").to_stdout
       .and output(/not the actual runtime dependencies/).to_stderr

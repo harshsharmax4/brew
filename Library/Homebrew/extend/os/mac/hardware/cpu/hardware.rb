@@ -85,6 +85,10 @@ module Hardware
           :arm_donan
         when 0x17d5b93a             # ARMv9.2-A (M4 Pro / M4 Max, Brava)
           :arm_brava
+        when 0x1d5a87e8             # ARMv9.2-A (M5, Hidra)
+          :arm_hidra
+        when 0xf76c5b1a             # ARMv9.2-A (M5 Pro / M5 Max, Sotra)
+          :arm_sotra
         else
           # When adding new ARM CPU families, please also update
           # test/hardware/cpu_spec.rb to include the new families.

@@ -4,7 +4,9 @@
 require "test/cask/dsl/shared_examples/base"
 
 RSpec.describe Cask::DSL::Container do
-  subject(:container) { described_class.new(**params) }
+  subject(:container) { klass.new(**params) }
+
+  let(:klass) { Cask::DSL::Container }
 
   describe "#pairs" do
     let(:params) { { nested: "NestedApp.dmg" } }

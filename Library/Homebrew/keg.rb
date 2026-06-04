@@ -97,7 +97,7 @@ class Keg
   # These paths relative to the keg's share directory should always be real
   # directories in the prefix, never symlinks.
   SHARE_PATHS = %w[
-    aclocal doc info java locale man
+    aclocal cps doc info java locale man
     man/man1 man/man2 man/man3 man/man4
     man/man5 man/man6 man/man7 man/man8
     man/cat1 man/cat2 man/cat3 man/cat4
@@ -170,11 +170,11 @@ class Keg
   sig { returns(T::Array[Pathname]) }
   def self.must_be_writable_directories
     @must_be_writable_directories ||= T.let((%w[
-      etc/bash_completion.d lib/pkgconfig
+      etc/bash_completion.d lib/cps lib/pkgconfig
       share/aclocal share/doc share/info share/locale share/man
       share/man/man1 share/man/man2 share/man/man3 share/man/man4
       share/man/man5 share/man/man6 share/man/man7 share/man/man8
-      share/zsh share/zsh/site-functions
+      share/cps share/zsh share/zsh/site-functions
       share/pwsh share/pwsh/completions
       var/log
     ].map { |dir| HOMEBREW_PREFIX/dir } + must_exist_subdirectories + [
@@ -212,7 +212,7 @@ class Keg
     @linked_keg_record = T.let(HOMEBREW_LINKED_KEGS/name, Pathname)
     @opt_record = T.let(HOMEBREW_PREFIX/"opt/#{name}", Pathname)
     @oldname_opt_records = T.let([], T::Array[Pathname])
-    @require_relocation = false
+    @require_relocation = T.let(false, T::Boolean)
   end
 
   sig { returns(Pathname) }
@@ -258,6 +258,11 @@ class Keg
 
   sig { returns(T::Boolean) }
   def require_relocation? = @require_relocation
+
+  sig { void }
+  def require_relocation!
+    @require_relocation = true
+  end
 
   sig { returns(T::Boolean) }
   def linked?
@@ -531,7 +536,8 @@ class Keg
       case relative_path.to_s
       when "charset.alias"
         :skip_file
-      when "pkgconfig", # pkg-config database gets explicitly created
+      when "cps",       # Common Package Specification database gets explicitly created
+           "pkgconfig", # pkg-config database gets explicitly created
            "cmake",     # cmake database gets explicitly created
            "dtrace",    # lib/language folders also get explicitly created
            /^gdk-pixbuf/,

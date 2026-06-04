@@ -6,6 +6,7 @@ require "cask/artifact/bashcompletion"
 require "cask/artifact/fishcompletion"
 require "cask/artifact/zshcompletion"
 require "extend/hash/keys"
+require "tempfile"
 require "utils/shell_completion"
 
 module Cask
@@ -100,11 +101,7 @@ module Cask
 
           script_path = completion_script_path(shell)
           script_path.dirname.mkpath
-          script_path.write(::Utils::ShellCompletion.generate_completion_output(
-                              [executable, *commands[1..]],
-                              shell_parameter,
-                              popen_read_env,
-                            ))
+          script_path.write(generate_completion_output([executable, *commands[1..]], shell_parameter, popen_read_env))
         rescue => e
           opoo "Failed to generate #{shell} completions from #{executable}: #{e}"
         end
@@ -123,6 +120,41 @@ module Cask
       end
 
       private
+
+      sig {
+        params(
+          completion_commands: T::Array[T.any(Pathname, String)],
+          shell_parameter:     T.nilable(T.any(String, T::Array[String])),
+          env:                 T::Hash[String, String],
+        ).returns(String)
+      }
+      def generate_completion_output(completion_commands, shell_parameter, env)
+        sandbox = cask_sandbox
+        unless sandbox
+          return ::Utils::ShellCompletion.generate_completion_output(completion_commands, shell_parameter,
+                                                                     env)
+        end
+
+        Tempfile.create("homebrew-cask-completions", HOMEBREW_TEMP) do |output|
+          Dir.mktmpdir("homebrew-cask-home") do |home|
+            sandbox.run(
+              *cask_sandbox_command(
+                env,
+                [
+                  "/bin/sh",
+                  "-c",
+                  "output=$1; shift; exec \"$@\" > \"$output\"#{" 2>/dev/null" unless ENV["HOMEBREW_STDERR"]}",
+                  "sh",
+                  output.path,
+                  *(completion_commands + Array(shell_parameter)),
+                ],
+                home:,
+              ),
+            )
+          end
+          output.read
+        end
+      end
 
       sig { returns(String) }
       def resolved_base_name

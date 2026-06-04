@@ -11,6 +11,7 @@ require "cask/exceptions"
 require "cask/installer"
 require "cask/uninstall"
 require "uninstall"
+require "trust"
 
 module Homebrew
   module Cmd
@@ -47,6 +48,7 @@ module Homebrew
         unavailable_errors = T.let([], T::Array[T.any(FormulaOrCaskUnavailableError, NoSuchKegError)])
         all_kegs = T.let([], T::Array[Keg])
         casks = T.let([], T::Array[Cask::Cask])
+        trusted_items_to_remove = T.let([], T::Array[[Symbol, String]])
 
         results.each do |item|
           case item
@@ -54,10 +56,17 @@ module Homebrew
             unavailable_errors << item
           when Cask::Cask
             casks << item
+            trusted_items_to_remove << [:cask, item.full_name]
           when Keg
             all_kegs << item
+            single_keg_tap = item.tab.tap
+            trusted_items_to_remove << [:formula, "#{single_keg_tap.name}/#{item.name}"] if single_keg_tap
           when Array
             all_kegs += item
+            item.each do |keg|
+              array_keg_tap = keg.tab.tap
+              trusted_items_to_remove << [:formula, "#{array_keg_tap.name}/#{keg.name}"] if array_keg_tap
+            end
           end
         end
 
@@ -86,6 +95,8 @@ module Homebrew
 
               raise Cask::CaskNotInstalledError, cask if !cask.installed? && !args.force?
 
+              next unless Cask::Uninstall.unpin_for_removal?(cask, force: args.force?)
+
               Cask::Installer.new(cask, verbose: args.verbose?, force: args.force?).zap
             rescue => e
               caught_exceptions << e
@@ -106,6 +117,13 @@ module Homebrew
           end
         rescue => e
           ofail e
+        end
+
+        trusted_items_to_remove.uniq.each do |type, name|
+          next unless (tap_name = Utils.tap_from_full_name(name))
+          next if Homebrew::Trust.trusted?(:tap, tap_name)
+
+          Homebrew::Trust.untrust!(type, name)
         end
 
         if ENV["HOMEBREW_AUTOREMOVE"].present?

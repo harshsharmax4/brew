@@ -4,6 +4,8 @@
 require "api"
 
 RSpec.describe Homebrew::API::Cask::CaskStructGenerator do
+  let(:klass) { Homebrew::API::Cask::CaskStructGenerator }
+
   describe ":process_depends_on" do
     let(:depends_on_non_macos) do
       {
@@ -18,13 +20,13 @@ RSpec.describe Homebrew::API::Cask::CaskStructGenerator do
     let(:depends_on_maximum_macos) { { maximum_macos: MacOSRequirement.new([:sequoia], comparator: "<=") } }
 
     specify :aggregate_failures do
-      expect(described_class.process_depends_on(depends_on_non_macos)).to eq({ arch: :intel, formula: ["foo"] })
-      expect(described_class.process_depends_on(depends_on_linux)).to eq({ linux: :any })
-      expect(described_class.process_depends_on(depends_on_macos_equals)).to eq({ macos: [:sequoia] })
-      expect(described_class.process_depends_on(depends_on_macos_greater)).to eq({ macos: :sequoia })
-      expect(described_class.process_depends_on(depends_on_macos_bare)).to eq({ macos: :any })
-      expect(described_class.process_depends_on({ macos: {} })).to eq({ macos: :any })
-      expect(described_class.process_depends_on(depends_on_maximum_macos)).to eq({ maximum_macos: :sequoia })
+      expect(klass.process_depends_on(depends_on_non_macos)).to eq({ arch: :intel, formula: ["foo"] })
+      expect(klass.process_depends_on(depends_on_linux)).to eq({ linux: :any })
+      expect(klass.process_depends_on(depends_on_macos_equals)).to eq({ macos: [:sequoia] })
+      expect(klass.process_depends_on(depends_on_macos_greater)).to eq({ macos: :sequoia })
+      expect(klass.process_depends_on(depends_on_macos_bare)).to eq({ macos: :any })
+      expect(klass.process_depends_on({ macos: {} })).to eq({ macos: :any })
+      expect(klass.process_depends_on(depends_on_maximum_macos)).to eq({ maximum_macos: :sequoia })
     end
   end
 
@@ -41,7 +43,7 @@ RSpec.describe Homebrew::API::Cask::CaskStructGenerator do
       [:bar, ["arg1", "arg2"], { kwarg1: "value1" }, nil],
       [:baz, [], { kwarg1: "value1" }, nil],
     ]
-    output = described_class.process_artifacts(input)
+    output = klass.process_artifacts(input)
     expect(output).to eq expected_output
   end
 
@@ -57,7 +59,7 @@ RSpec.describe Homebrew::API::Cask::CaskStructGenerator do
       using:      :curl,
       bar:        "baz",
     }
-    output = described_class.process_url_specs(input)
+    output = klass.process_url_specs(input)
     expect(output).to eq expected_output
   end
 end

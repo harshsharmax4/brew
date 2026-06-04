@@ -383,10 +383,27 @@ class Resource
       @manifest_annotations = T.let(nil, T.nilable(T::Hash[String, T.untyped]))
     end
 
+    sig { override.void }
+    def clear_cache
+      super
+      @manifest_annotations = nil
+    end
+
     sig { override.params(_filename: Pathname).void }
     def verify_download_integrity(_filename)
       # We don't have a checksum, but we can at least try parsing it.
       tab
+    end
+
+    sig { returns(T::Boolean) }
+    def downloaded_and_valid?
+      return false unless downloaded?
+
+      with_context(quiet: true) { verify_download_integrity(cached_download) }
+      true
+    rescue Error
+      clear_cache
+      false
     end
 
     sig { returns(T::Hash[String, T.untyped]) }

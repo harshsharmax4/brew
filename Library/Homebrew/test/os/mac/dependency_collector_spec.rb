@@ -4,9 +4,11 @@
 require "dependency_collector"
 
 RSpec.describe DependencyCollector do
-  alias_matcher :need_tar_xz_dependency, :be_tar_needs_xz_dependency
+  subject(:collector) { klass.new }
 
-  subject(:collector) { described_class.new }
+  let(:klass) { DependencyCollector }
+
+  alias_matcher :need_tar_xz_dependency, :be_tar_needs_xz_dependency
 
   specify "Resource dependency from a '.xz' URL" do
     resource = Resource.new

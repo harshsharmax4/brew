@@ -16,6 +16,7 @@ env:
   HOMEBREW_NO_AUTO_UPDATE: 1
   HOMEBREW_NO_ENV_HINTS: 1
   HOMEBREW_NO_INSTALL_CLEANUP: 1
+  HOMEBREW_SORBET_RECURSIVE: 1
   HOMEBREW_VERIFY_ATTESTATIONS: 1
 
 defaults:
@@ -48,10 +49,10 @@ jobs:
       - name: Install Bundler RubyGems
         run: brew install-bundler-gems --groups=style,typecheck
 
-      - name: Install shellcheck and shfmt
+      - name: Install actionlint, shellcheck and shfmt
         uses: Homebrew/actions/cache-homebrew-prefix@main
         with:
-          install: shellcheck shfmt
+          install: actionlint shellcheck shfmt
           workflow-key: tests-syntax
 
       - name: Cache style cache
@@ -64,10 +65,6 @@ jobs:
       - run: brew style
 
       - run: brew typecheck
-
-      - name: Check public API lists are in sync
-        working-directory: ${{ steps.set-up-homebrew.outputs.repository-path }}
-        run: brew ruby Library/Homebrew/github_actions_utils/public_api_check.rb
 
   tap-syntax:
     name: tap syntax
@@ -190,6 +187,7 @@ jobs:
     needs: syntax
     if: github.event_name != 'push'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: update-test (Linux)
@@ -215,7 +213,12 @@ jobs:
     needs: syntax
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 30
+    permissions:
+      contents: read
+      code-quality: write
+      pull-requests: read
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: tests (online)
@@ -267,7 +270,7 @@ jobs:
         if: matrix.name == 'tests (online)'
         uses: Homebrew/actions/cache-homebrew-prefix@main
         with:
-          install: subversion curl
+          install: curl subversion
           workflow-key: tests-tests-online
 
       - name: Install brew tests macOS dependencies
@@ -290,6 +293,7 @@ jobs:
           HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # These cannot be queried at the macOS level on GitHub Actions.
           HOMEBREW_LANGUAGES: en-GB
+          HOMEBREW_SANDBOX_LINUX: 1
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Get RSpec JUnit XML filenames
@@ -300,7 +304,8 @@ jobs:
           filenames=$(find Library/Homebrew/test/junit -name 'rspec*.xml' -print | tr '\n' ',')
           echo "filenames=${filenames%,}" >> "$GITHUB_OUTPUT"
 
-      - uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
+      - uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+        if: github.event_name == 'pull_request' || matrix.name != 'tests (online)'
         with:
           working-directory: ${{ steps.set-up-homebrew.outputs.repository-path }}
           files: ${{ steps.junit_xml.outputs.filenames }}
@@ -308,12 +313,20 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           report_type: test_results
 
-      - uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
+      - uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+        if: github.event_name == 'pull_request' || matrix.name != 'tests (online)'
         with:
           working-directory: ${{ steps.set-up-homebrew.outputs.repository-path }}
           files: Library/Homebrew/test/coverage/coverage.xml
           disable_search: true
           token: ${{ secrets.CODECOV_TOKEN }}
+
+      - uses: actions/upload-code-coverage@abb5995db9e0199b0e2bb9dbd136fce4cb1ec4d3 # v1.3.0
+        if: github.event_name == 'pull_request' || matrix.name != 'tests (online)'
+        with:
+          file: ${{ steps.set-up-homebrew.outputs.repository-path }}/Library/Homebrew/test/coverage/coverage.xml
+          language: Ruby
+          label: code-coverage/simplecov
 
   test-bot:
     name: ${{ matrix.name }}
@@ -322,6 +335,7 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     container: ${{ matrix.container }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: test-bot (Linux arm64)
@@ -339,6 +353,7 @@ jobs:
           - name: test-bot (macOS arm64)
             runs-on: macos-26
     env:
+      HOMEBREW_SANDBOX_LINUX: 1
       HOMEBREW_TEST_BOT_ANALYTICS: 1
     steps:
       - name: Install Homebrew and Homebrew's dependencies
@@ -408,6 +423,7 @@ jobs:
     if: github.repository_owner == 'Homebrew' && github.event_name != 'push'
     runs-on: ${{ matrix.runs-on }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: bundle and services (Linux)
@@ -430,7 +446,7 @@ jobs:
             brew "git"
             brew "memcached", restart_service: true
             brew "postgresql@15", restart_service: true
-            cask "1password"
+            cask "rectangle"
             cask "1password-cli"
             cask "google-chrome"
             # VSCode cask is not available on Linux.
@@ -457,6 +473,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runs-on }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: analytics (Linux)

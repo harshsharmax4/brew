@@ -4,9 +4,11 @@
 require "dependency_collector"
 
 RSpec.describe DependencyCollector do
-  alias_matcher :be_a_build_requirement, :be_build
+  subject(:collector) { klass.new }
 
-  subject(:collector) { described_class.new }
+  let(:klass) { DependencyCollector }
+
+  alias_matcher :be_a_build_requirement, :be_build
 
   def find_dependency(name)
     collector.deps.find { |dep| dep.name == name }

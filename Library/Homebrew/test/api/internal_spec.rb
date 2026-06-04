@@ -1,9 +1,11 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "api/internal"
 
 RSpec.describe Homebrew::API::Internal do
+  let(:klass) { Homebrew::API::Internal }
+
   let(:cache_dir) { mktmpdir }
   let(:packages_json) do
     <<~JSON
@@ -11,6 +13,7 @@ RSpec.describe Homebrew::API::Internal do
         "formulae": {
           "foo": {
             "desc": "Foo formula",
+            "executables": ["foo-bin", "food"],
             "homepage": "https://example.com/foo",
             "license": "MIT",
             "ruby_source_checksum": "09f88b61e36045188ddb1b1ba8e402b9f3debee1770cc4ca91355eeccb5f4a38",
@@ -87,6 +90,7 @@ RSpec.describe Homebrew::API::Internal do
     {
       "foo" => {
         "desc"                 => "Foo formula",
+        "executables"          => ["foo-bin", "food"],
         "homepage"             => "https://example.com/foo",
         "license"              => "MIT",
         "ruby_source_checksum" => "09f88b61e36045188ddb1b1ba8e402b9f3debee1770cc4ca91355eeccb5f4a38",
@@ -185,6 +189,7 @@ RSpec.describe Homebrew::API::Internal do
   before do
     FileUtils.mkdir_p(cache_dir/"internal")
     stub_const("Homebrew::API::HOMEBREW_CACHE_API", cache_dir)
+    Homebrew::API::Internal.clear_cache
     allow(Utils::Curl).to receive(:curl_download) do |*_args, **kwargs|
       kwargs[:to].write packages_json
     end
@@ -195,58 +200,65 @@ RSpec.describe Homebrew::API::Internal do
 
   it "returns the expected formula structs" do
     formula_structs.each do |name, struct|
-      expect(described_class.formula_struct(name)).to eq struct
+      expect(klass.formula_struct(name)).to eq struct
     end
   end
 
   it "returns the expected cask structs" do
     cask_structs.each do |name, struct|
-      expect(described_class.cask_struct(name)).to eq struct
+      expect(klass.cask_struct(name)).to eq struct
     end
   end
 
   it "returns the expected formula hashes" do
-    formula_hashes_output = described_class.formula_hashes
+    formula_hashes_output = klass.formula_hashes
     expect(formula_hashes_output).to eq formula_hashes
   end
 
+  it "writes formula executables from the internal packages JSON" do
+    allow(Homebrew::EnvConfig).to receive(:use_internal_api?).and_return(true)
+    Homebrew::API.write_names_and_aliases
+
+    expect((cache_dir/"internal/executables.txt").read).to eq("foo:foo-bin food\n")
+  end
+
   it "returns the expected cask hashes" do
-    cask_hashes_output = described_class.cask_hashes
+    cask_hashes_output = klass.cask_hashes
     expect(cask_hashes_output).to eq cask_hashes
   end
 
   it "returns the expected formula alias list" do
-    formula_aliases_output = described_class.formula_aliases
+    formula_aliases_output = klass.formula_aliases
     expect(formula_aliases_output).to eq formulae_aliases
   end
 
   it "returns the expected formula rename list" do
-    formula_renames_output = described_class.formula_renames
+    formula_renames_output = klass.formula_renames
     expect(formula_renames_output).to eq formulae_renames
   end
 
   it "returns the expected cask rename list" do
-    cask_renames_output = described_class.cask_renames
+    cask_renames_output = klass.cask_renames
     expect(cask_renames_output).to eq cask_renames
   end
 
   it "returns the expected formula tap git head" do
-    formula_tap_git_head_output = described_class.formula_tap_git_head
+    formula_tap_git_head_output = klass.formula_tap_git_head
     expect(formula_tap_git_head_output).to eq formula_tap_git_head
   end
 
   it "returns the expected cask tap git head" do
-    cask_tap_git_head_output = described_class.cask_tap_git_head
+    cask_tap_git_head_output = klass.cask_tap_git_head
     expect(cask_tap_git_head_output).to eq cask_tap_git_head
   end
 
   it "returns the expected formula tap migrations list" do
-    formula_tap_migrations_output = described_class.formula_tap_migrations
+    formula_tap_migrations_output = klass.formula_tap_migrations
     expect(formula_tap_migrations_output).to eq formula_tap_migrations
   end
 
   it "returns the expected cask tap migrations list" do
-    cask_tap_migrations_output = described_class.cask_tap_migrations
+    cask_tap_migrations_output = klass.cask_tap_migrations
     expect(cask_tap_migrations_output).to eq cask_tap_migrations
   end
 end

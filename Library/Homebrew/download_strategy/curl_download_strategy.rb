@@ -232,14 +232,18 @@ class CurlDownloadStrategy < AbstractFileDownloadStrategy
   def _fetch(url:, resolved_url:, timeout:)
     ohai "Downloading from #{resolved_url}" if url != resolved_url
 
-    if Homebrew::EnvConfig.no_insecure_redirect? &&
-       url.start_with?("https://") && !resolved_url.start_with?("https://")
-      error_message = "HTTPS to HTTP redirect detected and `$HOMEBREW_NO_INSECURE_REDIRECT` is set."
-      $stderr.puts error_message unless quiet?
-      raise CurlDownloadStrategyError.new(url, error_message)
-    end
+    ensure_no_insecure_redirect!(url:, resolved_url:)
 
     _curl_download resolved_url, temporary_path, timeout
+  end
+
+  sig { params(url: String, resolved_url: String).void }
+  def ensure_no_insecure_redirect!(url:, resolved_url:)
+    return unless insecure_redirect?(url:, resolved_url:)
+
+    error_message = "HTTPS to HTTP redirect detected and `$HOMEBREW_NO_INSECURE_REDIRECT` is set."
+    $stderr.puts error_message unless quiet?
+    raise CurlDownloadStrategyError.new(url, error_message)
   end
 
   sig {

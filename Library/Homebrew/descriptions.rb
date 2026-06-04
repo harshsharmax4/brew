@@ -30,7 +30,7 @@ class Descriptions
       eval_all:        T::Boolean,
     ).returns(T.attached_class)
   }
-  def self.search(string_or_regex, field, cache_store, status_data: {}, eval_all: Homebrew::EnvConfig.eval_all?)
+  def self.search(string_or_regex, field, cache_store, status_data: {}, eval_all: Homebrew::EnvConfig.tap_trust_configured?)
     cache_store.populate_if_empty!(eval_all:) if cache_store.is_a?(DescriptionCacheStore)
 
     results = case field

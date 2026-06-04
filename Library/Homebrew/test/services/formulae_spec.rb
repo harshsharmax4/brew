@@ -4,10 +4,13 @@
 require "services/formulae"
 
 RSpec.describe Homebrew::Services::Formulae do
+  sig { returns(T.class_of(Homebrew::Services::Formulae)) }
+  let(:klass) { Homebrew::Services::Formulae }
+
   describe "#services_list" do
     it "empty list without available formulae" do
-      allow(described_class).to receive(:available_services).and_return({})
-      expect(described_class.services_list).to eq([])
+      allow(klass).to receive(:available_services).and_return({})
+      expect(klass.services_list).to eq([])
     end
 
     it "list with available formulae" do
@@ -22,8 +25,8 @@ RSpec.describe Homebrew::Services::Formulae do
       ]
 
       expect(formula).to receive(:to_hash).and_return(expected[0])
-      allow(described_class).to receive(:available_services).and_return([formula])
-      expect(described_class.services_list).to eq(expected)
+      allow(klass).to receive(:available_services).and_return([formula])
+      expect(klass.services_list).to eq(expected)
     end
   end
 end

@@ -5,6 +5,8 @@ require "formula"
 require "service"
 
 RSpec.describe Homebrew::Service do
+  let(:klass) { Homebrew::Service }
+
   let(:name) { "formula_name" }
 
   def stub_formula(&block)
@@ -369,6 +371,28 @@ RSpec.describe Homebrew::Service do
 
       path = f.service.manual_command
       expect(path).to eq("#{HOMEBREW_PREFIX}/opt/formula_name/bin/beanstalkd")
+    end
+  end
+
+  describe "#path_dirs" do
+    it "returns directories needed by service paths" do
+      f = stub_formula do
+        service do
+          run [opt_bin/"beanstalkd", "-l", var/"run/beanstalkd.sock", "relative/path"]
+          error_log_path var/"log/beanstalkd.error.log"
+          log_path var/"log/beanstalkd.log"
+          input_path var/"in/beanstalkd"
+          root_dir var/"root"
+          working_dir var/"work"
+        end
+      end
+
+      expect(f.service.path_dirs).to contain_exactly(
+        HOMEBREW_PREFIX/"var/log",
+        HOMEBREW_PREFIX/"var/in",
+        HOMEBREW_PREFIX/"var/root",
+        HOMEBREW_PREFIX/"var/work",
+      )
     end
   end
 
@@ -1391,12 +1415,12 @@ RSpec.describe Homebrew::Service do
     end
 
     it "replaces placeholders with local paths" do
-      expect(described_class.from_hash(serialized_hash)).to eq(deserialized_hash)
+      expect(klass.from_hash(serialized_hash)).to eq(deserialized_hash)
     end
 
     describe "run command" do
       it "handles String argument correctly" do
-        expect(described_class.from_hash({
+        expect(klass.from_hash({
           "run" => "$HOMEBREW_PREFIX/opt/formula_name/bin/beanstalkd",
         })).to eq({
           run: "#{HOMEBREW_PREFIX}/opt/formula_name/bin/beanstalkd",
@@ -1404,7 +1428,7 @@ RSpec.describe Homebrew::Service do
       end
 
       it "handles Array argument correctly" do
-        expect(described_class.from_hash({
+        expect(klass.from_hash({
           "run" => ["$HOMEBREW_PREFIX/opt/formula_name/bin/beanstalkd", "--option"],
         })).to eq({
           run: ["#{HOMEBREW_PREFIX}/opt/formula_name/bin/beanstalkd", "--option"],
@@ -1412,7 +1436,7 @@ RSpec.describe Homebrew::Service do
       end
 
       it "handles Hash argument correctly" do
-        expect(described_class.from_hash({
+        expect(klass.from_hash({
           "run" => {
             "linux" => "$HOMEBREW_PREFIX/opt/formula_name/bin/beanstalkd",
             "macos" => ["$HOMEBREW_PREFIX/opt/formula_name/bin/beanstalkd", "--option"],

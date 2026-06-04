@@ -2,9 +2,16 @@
 # frozen_string_literal: true
 
 require "diagnostic"
+require "sandbox"
 
 RSpec.describe Homebrew::Diagnostic::Checks do
-  subject(:checks) { described_class.new }
+  subject(:checks) { klass.new }
+
+  let(:klass) { Homebrew::Diagnostic::Checks }
+
+  before do
+    allow(OS::Linux).to receive(:inside_docker?).and_return(false)
+  end
 
   specify "#check_supported_architecture" do
     allow(Hardware::CPU).to receive(:type).and_return(:arm64)
@@ -34,6 +41,102 @@ RSpec.describe Homebrew::Diagnostic::Checks do
 
     expect(checks.check_kernel_minimum_version)
       .to match(/Your Linux kernel .+ is too old/)
+  end
+
+  specify "#fatal_build_from_source_checks" do
+    expect(checks.fatal_build_from_source_checks).to include("check_linux_sandbox")
+  end
+
+  specify "#check_linux_sandbox returns nil when Linux sandboxing is disabled" do
+    expect(Sandbox).not_to receive(:failure_reason)
+
+    with_env(HOMEBREW_DEVELOPER: nil, HOMEBREW_SANDBOX_LINUX: nil) do
+      expect(checks.check_linux_sandbox).to be_nil
+    end
+  end
+
+  specify "#check_linux_sandbox returns nil when the Linux sandbox is available" do
+    allow(Sandbox).to receive(:state).and_return(:available)
+    expect(Sandbox).not_to receive(:failure_reason)
+
+    with_env(HOMEBREW_NO_SANDBOX_LINUX: nil, HOMEBREW_SANDBOX_LINUX: "1") do
+      expect(checks.check_linux_sandbox).to be_nil
+    end
+  end
+
+  specify "#check_linux_sandbox returns nil inside Docker" do
+    allow(OS::Linux).to receive(:inside_docker?).and_return(true)
+    expect(Sandbox).not_to receive(:state)
+
+    with_env(HOMEBREW_NO_SANDBOX_LINUX: nil, HOMEBREW_SANDBOX_LINUX: "1") do
+      expect(checks.check_linux_sandbox).to be_nil
+    end
+  end
+
+  specify "#check_linux_sandbox describes missing Bubblewrap" do
+    allow(Sandbox).to receive_messages(
+      state:          :missing,
+      failure_reason: "Bubblewrap is required to use the Linux sandbox but was not found.",
+    )
+
+    with_env(HOMEBREW_NO_SANDBOX_LINUX: nil, HOMEBREW_SANDBOX_LINUX: "1") do
+      message = checks.check_linux_sandbox.to_s
+
+      expect(message)
+        .to include(
+          "Bubblewrap is required to use the Linux sandbox but was not found.",
+          "Install Bubblewrap and ensure a rootless `bwrap` executable is available on `PATH`.",
+          "export HOMEBREW_NO_SANDBOX_LINUX=1",
+        )
+      expect(message).not_to include("sysctl")
+      expect(message).to end_with("  export HOMEBREW_NO_SANDBOX_LINUX=1\n")
+    end
+  end
+
+  specify "#check_linux_sandbox describes setuid Bubblewrap" do
+    allow(Sandbox).to receive_messages(
+      state:          :setuid,
+      failure_reason: "All found `bwrap` executables are setuid.",
+    )
+
+    with_env(HOMEBREW_NO_SANDBOX_LINUX: nil, HOMEBREW_SANDBOX_LINUX: "1") do
+      message = checks.check_linux_sandbox.to_s
+
+      expect(message)
+        .to include(
+          "All found `bwrap` executables are setuid.",
+          "Homebrew's Linux sandbox requires a rootless `bwrap` executable.",
+          "Install a non-setuid Bubblewrap or put it earlier on `PATH`.",
+          "export HOMEBREW_NO_SANDBOX_LINUX=1",
+        )
+      expect(message).not_to include("sysctl")
+      expect(message).to end_with("  export HOMEBREW_NO_SANDBOX_LINUX=1\n")
+    end
+  end
+
+  specify "#check_linux_sandbox describes Bubblewrap configuration" do
+    allow(Sandbox).to receive_messages(
+      state:          :unavailable,
+      failure_reason: "Bubblewrap is installed but cannot create a rootless sandbox.",
+    )
+
+    with_env(HOMEBREW_NO_SANDBOX_LINUX: nil, HOMEBREW_SANDBOX_LINUX: "1") do
+      message = checks.check_linux_sandbox.to_s
+
+      expect(message)
+        .to include(
+          "Bubblewrap is installed but cannot create a rootless sandbox.",
+          "Homebrew's Linux sandbox requires rootless Bubblewrap and unprivileged",
+          "sudo sysctl -w kernel.unprivileged_userns_clone=1",
+          "Allows unprivileged processes to create user namespaces.",
+          "sudo sysctl -w user.max_user_namespaces=28633",
+          "Allows each user to allocate enough user namespaces.",
+          "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true",
+          "Allows unprivileged user namespaces on AppArmor-enabled systems",
+          "export HOMEBREW_NO_SANDBOX_LINUX=1",
+        )
+      expect(message).to end_with("  export HOMEBREW_NO_SANDBOX_LINUX=1\n")
+    end
   end
 
   specify "#check_for_symlinked_home" do

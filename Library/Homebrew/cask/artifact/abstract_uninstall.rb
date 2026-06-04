@@ -70,6 +70,11 @@ module Cask
         to_h.flat_map { |key, val| Array(val).map { |v| "#{key.inspect} => #{v.inspect}" } }.join(", ")
       end
 
+      sig { returns(T::Array[String]) }
+      def bundle_ids_to_reopen
+        @bundle_ids_to_reopen ||= T.let([], T.nilable(T::Array[String]))
+      end
+
       private
 
       sig { params(options: DirectivesType).void }
@@ -210,8 +215,15 @@ module Cask
       end
 
       # :quit/:signal must come before :kext so the kext will not be in use by a running process
-      sig { params(bundle_ids: String, command: T.nilable(T.class_of(SystemCommand)), _kwargs: T.anything).void }
-      def uninstall_quit(*bundle_ids, command: nil, **_kwargs)
+      sig {
+        params(
+          bundle_ids: String,
+          command:    T.nilable(T.class_of(SystemCommand)),
+          upgrade:    T::Boolean,
+          _kwargs:    T.anything,
+        ).void
+      }
+      def uninstall_quit(*bundle_ids, command: nil, upgrade: false, **_kwargs)
         bundle_ids.each do |bundle_id|
           next unless running?(bundle_id)
 
@@ -222,6 +234,7 @@ module Cask
 
           ohai "Quitting application '#{bundle_id}'..."
 
+          quit_succeeded = T.let(false, T::Boolean)
           begin
             Timeout.timeout(10) do
               Kernel.loop do
@@ -230,12 +243,15 @@ module Cask
                 next if running?(bundle_id)
 
                 puts "Application '#{bundle_id}' quit successfully."
+                quit_succeeded = true
                 break
               end
             end
           rescue Timeout::Error
             opoo "Application '#{bundle_id}' did not quit. #{automation_access_instructions}"
           end
+
+          bundle_ids_to_reopen << bundle_id if upgrade && quit_succeeded
         end
       end
 

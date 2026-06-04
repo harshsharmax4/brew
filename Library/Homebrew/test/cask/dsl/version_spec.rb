@@ -2,6 +2,9 @@
 # frozen_string_literal: true
 
 RSpec.describe Cask::DSL::Version, :cask do
+  let(:klass) { Cask::DSL::Version }
+  let(:version) { klass.new(raw_version) }
+
   shared_examples "expectations hash" do |input_name, expectations|
     expectations.each do |input_value, expected_output|
       context "when #{input_name} is #{input_value.inspect}" do
@@ -35,27 +38,25 @@ RSpec.describe Cask::DSL::Version, :cask do
       end
     end
 
-    context "when other is a #{described_class}" do
+    context "when other is a #{Cask::DSL::Version}" do
       context "when other.raw_version == self.raw_version" do
-        let(:other) { described_class.new("1.2.3") }
+        let(:other) { klass.new("1.2.3") }
 
         it { is_expected.to be true }
       end
 
       context "when other.raw_version != self.raw_version" do
-        let(:other) { described_class.new("1.2.3.4") }
+        let(:other) { klass.new("1.2.3.4") }
 
         it { is_expected.to be false }
       end
     end
   end
 
-  let(:version) { described_class.new(raw_version) }
-
   describe "#initialize" do
     it "raises an error when the version contains a slash" do
       expect do
-        described_class.new("0.1,../../directory/traversal")
+        klass.new("0.1,../../directory/traversal")
       end.to raise_error(TypeError, %r{invalid characters: /})
     end
   end
@@ -352,7 +353,7 @@ RSpec.describe Cask::DSL::Version, :cask do
       "8u202,b08:1961070e4c9b4e26a04e7f5a083f551e",
     ].each do |unstable_version|
       it "detects #{unstable_version.inspect} as unstable" do
-        expect(described_class.new(unstable_version)).to be_unstable
+        expect(klass.new(unstable_version)).to be_unstable
       end
     end
 
@@ -362,7 +363,7 @@ RSpec.describe Cask::DSL::Version, :cask do
       "b226",
     ].each do |stable_version|
       it "does not detect #{stable_version.inspect} as unstable" do
-        expect(described_class.new(stable_version)).not_to be_unstable
+        expect(klass.new(stable_version)).not_to be_unstable
       end
     end
   end

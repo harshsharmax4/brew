@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/shell_commands"
 
 RSpec.describe RuboCop::Cop::Homebrew::ExecShellMetacharacters do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::Homebrew::ExecShellMetacharacters }
 
   context "when auditing exec calls" do
     it "reports aan offense when output piping is used" do

@@ -25,6 +25,16 @@ module OS
     RbConfig::CONFIG["host_os"].include? "linux"
   end
 
+  # Check whether the operating system is Linux on windows (WSL).
+  #
+  # @api public
+  sig { returns(T::Boolean) }
+  def self.wsl?
+    return false if ENV["HOMEBREW_TEST_GENERIC_OS"]
+
+    /-microsoft/i.match?(kernel_version.to_s)
+  end
+
   # Get the kernel version.
   #
   # @api public
@@ -114,7 +124,7 @@ module OS
     else
       "https://docs.brew.sh/Troubleshooting"
     end.freeze
-    PATH_OPEN = if OS::Linux.wsl? && (wslview = which("wslview").presence)
+    PATH_OPEN = if wsl? && (wslview = which("wslview").presence)
       wslview.to_s
     else
       "xdg-open"

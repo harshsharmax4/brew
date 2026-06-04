@@ -6,8 +6,10 @@ require "utils/github/artifacts"
 
 RSpec.describe Homebrew::TestBot::TestFormulae do
   subject(:test_formulae) do
-    described_class.new(tap: nil, git: nil, dry_run: false, fail_fast: false, verbose: false)
+    klass.new(tap: nil, git: nil, dry_run: false, fail_fast: false, verbose: false)
   end
+
+  let(:klass) { Homebrew::TestBot::TestFormulae }
 
   describe "#download_artifacts_from_previous_run!" do
     it "does not raise KeyError when accessing downloaded_artifacts for a new SHA" do

@@ -4,8 +4,9 @@
 require "livecheck/strategy"
 
 RSpec.describe Homebrew::Livecheck::Strategy::Apache do
-  subject(:apache) { described_class }
+  subject(:apache) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Strategy::Apache }
   let(:apache_urls) do
     {
       version_dir:                    "https://www.apache.org/dyn/closer.lua?path=abc/1.2.3/def-1.2.3.tar.gz",
@@ -29,7 +30,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Apache do
     }
   end
   let(:non_apache_url) { "https://brew.sh/test" }
-
   let(:generated) do
     values = {
       version_dir:            {
@@ -66,7 +66,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Apache do
 
     values
   end
-
   let(:content) do
     start_html = <<~EOS
       <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
@@ -123,7 +122,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Apache do
       files:       start_html + files + end_html,
     }
   end
-
   let(:matches) do
     {
       directories: ["1.2.0", "1.2.1", "1.2.2"],

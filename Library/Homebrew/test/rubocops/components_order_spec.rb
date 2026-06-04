@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/components_order"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::ComponentsOrder do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::ComponentsOrder }
 
   context "when auditing formula components order" do
     it "reports and corrects an offense when `uses_from_macos` precedes `depends_on`" do

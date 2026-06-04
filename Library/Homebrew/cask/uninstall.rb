@@ -20,6 +20,8 @@ module Cask
 
         raise CaskNotInstalledError, cask if !cask.installed? && !force
 
+        next unless unpin_for_removal?(cask, force:)
+
         Installer.new(cask, binaries:, force:, verbose:).uninstall
       rescue => e
         caught_exceptions << e
@@ -31,6 +33,19 @@ module Cask
       raise MultipleCaskErrors, caught_exceptions if caught_exceptions.count > 1
 
       raise caught_exceptions.fetch(0)
+    end
+
+    sig { params(cask: ::Cask::Cask, force: T::Boolean).returns(T::Boolean) }
+    def self.unpin_for_removal?(cask, force:)
+      return true unless cask.pinned?
+
+      unless force
+        onoe "#{cask.full_name} is pinned. You must unpin it to uninstall."
+        return false
+      end
+
+      cask.unpin
+      true
     end
 
     sig { params(casks: ::Cask::Cask, named_args: T::Array[String]).void }

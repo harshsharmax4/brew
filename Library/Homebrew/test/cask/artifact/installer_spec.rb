@@ -1,14 +1,13 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 RSpec.describe Cask::Artifact::Installer, :cask do
-  subject(:installer) { described_class.new(cask, **args) }
+  subject(:installer) { klass.new(cask, **args) }
 
+  let(:klass) { Cask::Artifact::Installer }
   let(:staged_path) { mktmpdir }
   let(:cask) { instance_double(Cask::Cask, staged_path:) }
-
   let(:command) { SystemCommand }
-
   let(:args) { {} }
 
   describe "#install_phase" do
@@ -37,6 +36,14 @@ RSpec.describe Cask::Artifact::Installer, :cask do
             env: { "PATH" => PATH.new("#{HOMEBREW_PREFIX}/bin", "#{HOMEBREW_PREFIX}/sbin", ENV.fetch("PATH")) },
           ),
         )
+
+        installer.install_phase(command:)
+      end
+
+      it "does not sandbox the executable" do
+        allow(Sandbox).to receive(:available?).and_return(true)
+        expect(Sandbox).not_to receive(:new)
+        expect(command).to receive(:run!)
 
         installer.install_phase(command:)
       end

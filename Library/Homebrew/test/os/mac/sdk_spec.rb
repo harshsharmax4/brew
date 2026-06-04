@@ -1,9 +1,10 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 RSpec.describe OS::Mac::CLTSDKLocator do
-  subject(:locator) { described_class.new }
+  subject(:locator) { klass.new }
 
+  let(:klass) { OS::Mac::CLTSDKLocator }
   let(:big_sur_sdk) { OS::Mac::SDK.new(MacOSVersion.new("11"), "/some/path/MacOSX.sdk", :clt) }
   let(:catalina_sdk) { OS::Mac::SDK.new(MacOSVersion.new("10.15"), "/some/path/MacOSX10.15.sdk", :clt) }
 
@@ -12,7 +13,8 @@ RSpec.describe OS::Mac::CLTSDKLocator do
 
     expect(locator.sdk_for(MacOSVersion.new("11"))).to eq(big_sur_sdk)
     expect(locator.sdk_for(MacOSVersion.new("10.15"))).to eq(catalina_sdk)
-    expect { locator.sdk_for(MacOSVersion.new("10.14")) }.to raise_error(described_class::NoSDKError)
+    expect { locator.sdk_for(MacOSVersion.new("10.14")) }
+      .to raise_error { |e| expect(e.class.name).to eq("OS::Mac::BaseSDKLocator::NoSDKError") }
   end
 
   describe "#sdk_if_applicable" do

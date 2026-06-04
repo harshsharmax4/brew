@@ -26,6 +26,11 @@ module RuboCop
         sig { params(node: RuboCop::AST::Node).void }
         def on_send(node)
           file_path = processed_source.file_path
+          # The OS loader, requirements and tests need direct host checks; this
+          # cop is for portable production code that should live under `extend/os`.
+          return if file_path.match?(%r{(?:\A|/)Library/Homebrew/(?:requirements|test)/}) ||
+                    file_path.match?(%r{(?:\A|/)Library/Homebrew/os\.rb\z})
+
           if file_path.include?("extend/os/mac/")
             add_offense(node, message: extend_offense_message("mac", "mac")) if os_mac?(node)
             add_offense(node, message: extend_offense_message("mac", "linux")) if os_linux?(node)

@@ -7,8 +7,7 @@ cask "invalid-depends-on-macos-bare-and-version" do
   url "file://#{TEST_FIXTURE_DIR}/cask/caffeine.zip"
   homepage "https://brew.sh/invalid-depends-on-macos-bare-and-version"
 
-  depends_on_arg = :macos
-  depends_on depends_on_arg
+  depends_on :macos
   depends_on macos: :monterey
 
   app "Caffeine.app"

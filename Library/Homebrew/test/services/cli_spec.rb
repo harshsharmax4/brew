@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "services/cli"
@@ -6,8 +6,9 @@ require "services/system"
 require "services/formula_wrapper"
 
 RSpec.describe Homebrew::Services::Cli do
-  subject(:services_cli) { described_class }
+  subject(:services_cli) { klass }
 
+  let(:klass) { Homebrew::Services::Cli }
   let(:service_string) { "service" }
 
   describe "#bin" do
@@ -149,6 +150,50 @@ RSpec.describe Homebrew::Services::Cli do
         services_cli.start([service])
       end.to output(expected_output).to_stdout
     end
+
+    context "when deciding whether to load target service" do
+      let(:service) do
+        instance_double(
+          Homebrew::Services::FormulaWrapper,
+          name:         "name",
+          pid?:         false,
+          installed?:   true,
+          service_file: instance_double(Pathname, exist?: true),
+        )
+      end
+
+      before do
+        allow(services_cli).to receive(:install_service_file)
+      end
+
+      it "loads service for root" do
+        allow(Homebrew::Services::System).to receive(:root?).and_return(true)
+        allow(services_cli).to receive(:take_root_ownership?).and_return(true)
+        expect(services_cli).to receive(:service_load).with(service, nil, enable: true)
+        services_cli.start([service])
+      end
+
+      it "loads service for non-root user" do
+        allow(Homebrew::Services::System).to receive(:root?).and_return(false)
+        allow(services_cli).to receive(:take_root_ownership?).and_return(false)
+        expect(services_cli).to receive(:service_load).with(service, nil, enable: true)
+        services_cli.start([service])
+      end
+
+      it "loads service for root when given `--sudo-service-user`" do
+        allow(Homebrew::Services::System).to receive(:root?).and_return(true)
+        allow(services_cli).to receive_messages(sudo_service_user: "_serviced", take_root_ownership?: false)
+        expect(services_cli).to receive(:service_load).with(service, nil, enable: true)
+        services_cli.start([service])
+      end
+
+      it "does not load service for non-root user when given `--sudo-service-user`" do
+        allow(Homebrew::Services::System).to receive(:root?).and_return(false)
+        allow(services_cli).to receive_messages(sudo_service_user: "_serviced", take_root_ownership?: false)
+        expect(services_cli).not_to receive(:service_load)
+        services_cli.start([service])
+      end
+    end
   end
 
   describe "#stop" do
@@ -239,6 +284,21 @@ RSpec.describe Homebrew::Services::Cli do
     end
   end
 
+  describe "#take_root_ownership?" do
+    it "returns false when given non-root user" do
+      allow(Homebrew::Services::System).to receive(:root?).and_return(false)
+      service = instance_double(Homebrew::Services::FormulaWrapper)
+      expect(services_cli.take_root_ownership?(service)).to be(false)
+    end
+
+    it "returns false when given `--sudo-service-user`" do
+      allow(Homebrew::Services::System).to receive(:root?).and_return(true)
+      allow(services_cli).to receive(:sudo_service_user).and_return("_serviced")
+      service = instance_double(Homebrew::Services::FormulaWrapper)
+      expect(services_cli.take_root_ownership?(service)).to be(false)
+    end
+  end
+
   describe "#install_service_file" do
     it "checks service is installed" do
       service = instance_double(Homebrew::Services::FormulaWrapper, name: "name", installed?: false)
@@ -288,6 +348,53 @@ RSpec.describe Homebrew::Services::Cli do
       services_cli.install_service_file(service, nil)
 
       expect(service.timer_dest.read).to eq("timer")
+    end
+
+    context "when given `--sudo-service-user`" do
+      let(:dest_dir) { mktmpdir }
+      let(:service) do
+        source_dir = mktmpdir
+        service_file = source_dir/"homebrew.test.plist"
+        service_file.write <<~XML
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>Label</key>
+            <string>homebrew.test</string>
+            <key>ProgramArguments</key>
+            <array>
+              <string>/opt/homebrew/opt/test/bin/test</string>
+            </array>
+          </dict>
+          </plist>
+        XML
+        instance_double(
+          Homebrew::Services::FormulaWrapper,
+          name:         "name",
+          service_name: "homebrew.test",
+          installed?:   true,
+          service_file:,
+          dest:         dest_dir/"homebrew.test.plist",
+          dest_dir:,
+        )
+      end
+
+      before do
+        allow(Homebrew::Services::System).to receive_messages(launchctl?: true, systemctl?: false)
+        allow(services_cli).to receive(:sudo_service_user).and_return("_serviced")
+      end
+
+      it "prints the given username" do
+        expect do
+          services_cli.install_service_file(service, nil)
+        end.to output(/Setting username in homebrew\.test to: _serviced/).to_stdout
+      end
+
+      it "sets username in the generated plist" do
+        services_cli.install_service_file(service, nil)
+        expect(service.dest.read).to include("<key>UserName</key>", "<string>_serviced</string>")
+      end
     end
   end
 
@@ -423,11 +530,48 @@ RSpec.describe Homebrew::Services::Cli do
       end.to output("==> Successfully ran `name` (label: service.name)\n").to_stdout
     end
 
+    it "warns root for login without `--sudo-service-user`" do
+      expect(Homebrew::Services::System).to receive(:launchctl?).once.and_return(false)
+      expect(Homebrew::Services::System).to receive(:systemctl?).once.and_return(false)
+      expect(Homebrew::Services::System).to receive(:root?).once.and_return(true)
+      expect do
+        services_cli.service_load(
+          instance_double(
+            Homebrew::Services::FormulaWrapper,
+            name:             "name",
+            service_name:     "service.name",
+            service_startup?: false,
+          ),
+          nil,
+          enable: true,
+        )
+      end.to output(/name must be run as non-root to start at user login!/).to_stderr
+    end
+
+    it "does not warn root for login when given `--sudo-service-user`" do
+      expect(Homebrew::Services::System).to receive(:launchctl?).once.and_return(false)
+      expect(Homebrew::Services::System).to receive(:systemctl?).once.and_return(false)
+      expect(Homebrew::Services::System).to receive(:root?).twice.and_return(true)
+      allow(services_cli).to receive(:sudo_service_user).and_return("_serviced")
+      expect do
+        services_cli.service_load(
+          instance_double(
+            Homebrew::Services::FormulaWrapper,
+            name:             "name",
+            service_name:     "service.name",
+            service_startup?: false,
+          ),
+          nil,
+          enable: true,
+        )
+      end.not_to output(/must be run as non-root to start at user login!/).to_stderr
+    end
+
     it "triggers launchctl" do
       expect(Homebrew::Services::System).to receive(:launchctl?).once.and_return(true)
       expect(Homebrew::Services::System).not_to receive(:systemctl?)
       expect(Homebrew::Services::System).to receive(:root?).twice.and_return(false)
-      expect(described_class).to receive(:launchctl_load).once.and_return(true)
+      expect(klass).to receive(:launchctl_load).once.and_return(true)
       expect do
         services_cli.service_load(
           instance_double(
@@ -436,6 +580,36 @@ RSpec.describe Homebrew::Services::Cli do
             service_name:     "service.name",
             service_startup?: false,
             service_file:     instance_double(Pathname, exist?: false),
+            path_dirs:        [],
+          ),
+          nil,
+          enable: false,
+        )
+      end.to output("==> Successfully ran `name` (label: service.name)\n").to_stdout
+    end
+
+    it "creates service path directories before loading" do
+      expect(Homebrew::Services::System).to receive(:launchctl?).once.and_return(true)
+      expect(Homebrew::Services::System).not_to receive(:systemctl?)
+      expect(Homebrew::Services::System).to receive(:root?).twice.and_return(false)
+
+      path_dirs = [
+        mktmpdir/"var/run",
+        mktmpdir/"var/log",
+      ]
+      expect(klass).to receive(:launchctl_load).once do
+        path_dirs.each { expect(it).to be_a_directory }
+      end
+
+      expect do
+        services_cli.service_load(
+          instance_double(
+            Homebrew::Services::FormulaWrapper,
+            name:             "name",
+            service_name:     "service.name",
+            service_startup?: false,
+            service_file:     instance_double(Pathname, exist?: false),
+            path_dirs:,
           ),
           nil,
           enable: false,
@@ -457,6 +631,7 @@ RSpec.describe Homebrew::Services::Cli do
             service_startup?: false,
             dest:             instance_double(Pathname, exist?: true),
             timed?:           false,
+            path_dirs:        [],
           ),
           nil,
           enable: false,
@@ -478,6 +653,7 @@ RSpec.describe Homebrew::Services::Cli do
             service_startup?: false,
             dest:             instance_double(Pathname, exist?: true),
             timed?:           false,
+            path_dirs:        [],
           ),
           nil,
           enable: true,

@@ -51,7 +51,7 @@ module Homebrew
       exit! 1 # never gets here unless exec failed
     end
     Process.wait(pid)
-    $CHILD_STATUS.success?
+    $CHILD_STATUS.success? || false
   end
   # TODO: make private_class_method when possible
   # private_class_method :_system

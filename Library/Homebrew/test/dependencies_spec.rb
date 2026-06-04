@@ -1,11 +1,13 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "dependencies"
 require "dependency"
 
 RSpec.describe Dependencies do
-  subject(:dependencies) { described_class.new }
+  subject(:dependencies) { klass.new }
+
+  let(:klass) { Dependencies }
 
   describe "#<<" do
     it "returns itself" do
@@ -58,8 +60,8 @@ RSpec.describe Dependencies do
   end
 
   specify "equality" do
-    a = described_class.new
-    b = described_class.new
+    a = klass.new
+    b = klass.new
 
     dep = Dependency.new("foo")
 

@@ -5,10 +5,12 @@ require "language/python"
 require "resource"
 
 RSpec.describe Language::Python::Virtualenv, :needs_python do
+  let(:klass) { Language::Python::Virtualenv }
+
   describe "#virtualenv_install_with_resources" do
     let(:venv) { instance_double(Language::Python::Virtualenv::Virtualenv) }
     let(:f) do
-      virtualenv_module = described_class
+      virtualenv_module = klass
       formula "foo" do
         include virtualenv_module
 
@@ -149,10 +151,10 @@ RSpec.describe Language::Python::Virtualenv, :needs_python do
   end
 
   describe Language::Python::Virtualenv::Virtualenv do
-    subject(:virtualenv) { described_class.new(formula, dir, "python") }
+    subject(:virtualenv) { klass.new(formula, dir, "python") }
 
+    let(:klass) { Language::Python::Virtualenv::Virtualenv }
     let(:dir) { mktmpdir }
-
     let(:resource) { instance_double(Resource, "resource", stage: true) }
     let(:formula_bin) { dir/"formula_bin" }
     let(:formula_man) { dir/"formula_man" }

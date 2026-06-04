@@ -1,0 +1,11 @@
+---
+name: rbi
+version: 0.3.12
+type: bundler
+summary: RBI generation framework
+homepage: https://github.com/Shopify/rbi
+license: mit
+licenses:
+- sources: README.md
+  text: The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
+notices: []

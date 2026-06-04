@@ -33,13 +33,9 @@ module Homebrew
         T.cast(const_get(:BANNER_NAME), String)
       end
 
-      sig { returns(String) }
-      def self.switch_description
-        if cleanup_supported?
-          "`list`, `dump` or `cleanup` #{banner_name}."
-        else
-          "`list` or `dump` #{banner_name}."
-        end
+      sig { params(description: String).returns(String) }
+      def self.switch_description(description)
+        description
       end
 
       sig { params(name: String, options: Homebrew::Bundle::EntryInputOptions).returns(Dsl::Entry) }
@@ -114,13 +110,28 @@ module Homebrew
         :"bundle_dump_no_#{type}"
       end
 
+      sig { returns(Symbol) }
+      def self.cleanup_disable_env
+        :"bundle_cleanup_no_#{type}"
+      end
+
       sig { returns(T::Boolean) }
       def self.dump_disable_supported?
         true
       end
 
+      sig { returns(String) }
+      def self.cleanup_disable_description
+        "`cleanup` without #{banner_name}."
+      end
+
       sig { returns(Symbol) }
       def self.dump_disable_predicate_method
+        disable_predicate_method
+      end
+
+      sig { returns(Symbol) }
+      def self.disable_predicate_method
         :"no_#{type}?"
       end
 
@@ -240,6 +251,11 @@ module Homebrew
 
         installed_names = packages.map { |pkg| dump_name(pkg) }
         installed_names - kept_packages
+      end
+
+      sig { params(item: String).returns(String) }
+      def self.cleanup_item_name(item)
+        item
       end
 
       sig { returns(Symbol) }

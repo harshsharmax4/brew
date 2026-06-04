@@ -65,8 +65,10 @@ module OS
           old_interpreter.sub old_prefix, new_prefix
         end
         updated[:interpreter] = new_interpreter if old_interpreter != new_interpreter
+        return false if updated.empty?
 
         file.patch!(interpreter: updated[:interpreter], rpath: updated[:rpath])
+        require_relocation!
         true
       end
 

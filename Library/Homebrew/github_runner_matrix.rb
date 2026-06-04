@@ -40,7 +40,7 @@ class GitHubRunnerMatrix
   end
   private_constant :LinuxRunnerSpecHash
 
-  RunnerSpecHash = T.type_alias { T.any(LinuxRunnerSpecHash, MacOSRunnerSpecHash) }
+  RunnerSpecHash = T.type_alias { T::Hash[Symbol, T.untyped] }
   private_constant :RunnerSpecHash
   sig { returns(T::Array[GitHubRunner]) }
   attr_reader :runners
@@ -51,9 +51,10 @@ class GitHubRunnerMatrix
       deleted_formulae: T::Array[String],
       all_supported:    T::Boolean,
       dependent_matrix: T::Boolean,
+      dependent_shards: T.nilable(Integer),
     ).void
   }
-  def initialize(testing_formulae, deleted_formulae, all_supported:, dependent_matrix:)
+  def initialize(testing_formulae, deleted_formulae, all_supported:, dependent_matrix:, dependent_shards: nil)
     if all_supported && (testing_formulae.present? || deleted_formulae.present? || dependent_matrix)
       raise ArgumentError, "all_supported is mutually exclusive to other arguments"
     end
@@ -62,6 +63,7 @@ class GitHubRunnerMatrix
     @deleted_formulae = deleted_formulae
     @all_supported = all_supported
     @dependent_matrix = dependent_matrix
+    @dependent_shards = T.let(dependent_shards || 1, Integer)
     @compatible_testing_formulae = T.let({}, T::Hash[GitHubRunner, T::Array[TestRunnerFormula]])
     @formulae_with_untested_dependents = T.let({}, T::Hash[GitHubRunner, T::Array[TestRunnerFormula]])
 
@@ -73,9 +75,19 @@ class GitHubRunnerMatrix
 
   sig { returns(T::Array[RunnerSpecHash]) }
   def active_runner_specs_hash
-    runners.select(&:active)
-           .map(&:spec)
-           .map(&:to_h)
+    specs = runners.select(&:active)
+                   .map(&:spec)
+                   .map(&:to_h)
+    return specs if !@dependent_matrix || @dependent_shards == 1
+
+    specs.flat_map do |spec|
+      (1..@dependent_shards).map do |shard|
+        spec.merge(
+          name:                      "#{spec.fetch(:name)} shard #{shard}/#{@dependent_shards}",
+          formulae_dependents_shard: "#{shard}/#{@dependent_shards}",
+        )
+      end
+    end
   end
 
   private

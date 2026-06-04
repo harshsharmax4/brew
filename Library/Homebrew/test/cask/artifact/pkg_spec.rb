@@ -1,7 +1,9 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 RSpec.describe Cask::Artifact::Pkg, :cask do
+  let(:klass) { Cask::Artifact::Pkg }
+
   let(:cask) { Cask::CaskLoader.load(cask_path("with-installable")) }
   let(:fake_system_command) { class_double(SystemCommand) }
 
@@ -11,7 +13,7 @@ RSpec.describe Cask::Artifact::Pkg, :cask do
 
   describe "install_phase" do
     it "runs the system installer on the specified pkgs" do
-      pkg = cask.artifacts.find { |a| a.is_a?(described_class) }
+      pkg = cask.artifacts.find { |a| a.is_a?(klass) }
 
       expect(fake_system_command).to receive(:run!).with(
         "/usr/sbin/installer",
@@ -34,7 +36,7 @@ RSpec.describe Cask::Artifact::Pkg, :cask do
     let(:cask) { Cask::CaskLoader.load(cask_path("with-choices")) }
 
     it "passes the choice changes xml to the system installer" do
-      pkg = cask.artifacts.find { |a| a.is_a?(described_class) }
+      pkg = cask.artifacts.find { |a| a.is_a?(klass) }
 
       file = instance_double(Tempfile, path: Pathname.new("/tmp/choices.xml"))
 

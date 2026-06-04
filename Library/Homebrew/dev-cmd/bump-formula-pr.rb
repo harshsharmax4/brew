@@ -6,7 +6,6 @@ require "bump"
 require "fileutils"
 require "formula"
 require "livecheck/livecheck"
-require "utils/inreplace"
 require "utils/tar"
 
 module Homebrew
@@ -99,6 +98,7 @@ module Homebrew
       sig { override.void }
       def run
         Homebrew.install_bundler_gems!(groups: ["ast"])
+        require "utils/ast"
         require "utils/pypi"
 
         if args.revision.present? && args.tag.nil? && args.version.nil?
@@ -261,104 +261,39 @@ module Homebrew
             new_hash = resource_path.sha256
           end
 
-          replacement_pairs = []
-          if commit_formula.revision.nonzero?
-            replacement_pairs << [
-              /^  revision \d+\n(\n(  head "))?/m,
-              "\\2",
-            ]
-          end
-
-          replacement_pairs += commit_formula_spec.mirrors.map do |mirror|
-            [
-              / +mirror "#{Regexp.escape(mirror)}"\n/m,
-              "",
-            ]
-          end
-
-          replacement_pairs += if new_url_hash.present?
-            [
-              [
-                /#{Regexp.escape(T.must(commit_formula_spec.url))}/,
-                new_url,
-              ],
-              [
-                old_hash,
-                new_hash,
-              ],
-            ]
-          elsif new_tag.present?
-            [
-              [
-                /tag:(\s+")#{commit_formula_spec.specs[:tag]}(?=")/,
-                "tag:\\1#{new_tag}\\2",
-              ],
-              [
-                commit_formula_spec.specs[:revision],
-                new_revision,
-              ],
-            ]
-          elsif new_url.present?
-            [
-              [
-                /#{Regexp.escape(T.must(commit_formula_spec.url))}/,
-                new_url,
-              ],
-              [
-                commit_formula_spec.specs[:revision],
-                new_revision,
-              ],
-            ]
-          else
-            [
-              [
-                commit_formula_spec.specs[:revision],
-                new_revision,
-              ],
-            ]
-          end
-
           old_contents = commit_formula.path.read
+          formula_ast = Utils::AST::FormulaAST.new(old_contents)
 
-          if new_mirrors.present? && new_url.present?
-            replacement_pairs << [
-              /^( +)(url "#{Regexp.escape(new_url)}"[^\n]*?\n)/m,
-              "\\1\\2\\1mirror \"#{new_mirrors.join("\"\n\\1mirror \"")}\"\n",
-            ]
+          formula_ast.remove_stanza(:revision) if commit_formula.revision.nonzero?
+          formula_ast.remove_stable_stanzas(:mirror) if commit_formula_spec.mirrors.present?
+
+          if new_url_hash.present?
+            formula_ast.replace_stable_stanza_value(:url, T.must(new_url))
+            formula_ast.replace_stable_stanza_value(:sha256, new_hash)
+          elsif new_tag.present?
+            formula_ast.replace_stable_stanza_hash_value(:url, :tag, new_tag)
+            formula_ast.replace_stable_stanza_hash_value(:url, :revision, T.must(new_revision))
+          elsif new_url.present?
+            formula_ast.replace_stable_stanza_value(:url, new_url)
+            formula_ast.replace_stable_stanza_hash_value(:url, :revision, T.must(new_revision))
+          else
+            formula_ast.replace_stable_stanza_hash_value(:url, :revision, T.must(new_revision))
           end
 
+          stanzas_to_add = []
+          new_mirrors&.each { |mirror| stanzas_to_add << [:mirror, "mirror #{mirror.inspect}"] } if new_url.present?
           if forced_version && new_version != "0"
-            replacement_pairs << if old_contents.include?("version \"#{old_formula_version}\"")
-              [
-                "version \"#{old_formula_version}\"",
-                "version \"#{new_version}\"",
-              ]
-            elsif new_mirrors.present?
-              [
-                /^( +)(mirror "#{Regexp.escape(new_mirrors.last)}"\n)/m,
-                "\\1\\2\\1version \"#{new_version}\"\n",
-              ]
-            elsif new_url.present?
-              [
-                /^( +)(url "#{Regexp.escape(new_url)}"[^\n]*?\n)/m,
-                "\\1\\2\\1version \"#{new_version}\"\n",
-              ]
-            elsif new_revision.present?
-              [
-                /^( {2})( +)(:revision => "#{new_revision}"\n)/m,
-                "\\1\\2\\3\\1version \"#{new_version}\"\n",
-              ]
+            if formula_ast.stable_stanza?(:version)
+              formula_ast.replace_stable_stanza_value(:version, T.must(new_version))
+            else
+              stanzas_to_add << [:version, T.must(new_version)]
             end
           elsif forced_version && new_version == "0"
-            replacement_pairs << [
-              /^  version "[\w.\-+]+"\n/m,
-              "",
-            ]
+            formula_ast.remove_stable_stanza(:version) if formula_ast.stable_stanza?(:version)
           end
-          new_contents = Utils::Inreplace.inreplace_pairs(commit_formula.path,
-                                                          replacement_pairs.uniq.compact,
-                                                          read_only_run: args.dry_run?,
-                                                          silent:        args.quiet?)
+          formula_ast.add_stable_stanzas_after(:url, stanzas_to_add) if stanzas_to_add.present?
+          new_contents = formula_ast.process
+          commit_formula.path.atomic_write(new_contents) unless args.dry_run?
 
           new_formula_version = formula_version(commit_formula, new_contents)
 
@@ -761,50 +696,31 @@ module Homebrew
         Utils::Tar.validate_file(resource_path)
         new_hash = resource_path.sha256
 
-        escaped_name = Regexp.escape(resource.name.to_s)
+        resource_name = resource.name.to_s
+        formula_ast = Utils::AST::FormulaAST.new(formula.path.read)
+        formula_ast.replace_resource_stanza_value(resource_name, :url, new_url, old_value: old_url)
 
-        Utils::Inreplace.inreplace formula.path do |s|
-          leading_spaces = T.must(s.inreplace_string.match(/^( +)resource "#{escaped_name}"/)).captures.first
-          inreplace_regex =
-            /^#{leading_spaces}resource "#{escaped_name}" do\n.*?^#{leading_spaces}end\n/m
+        resource.mirrors.each_with_index do |old_mirror, i|
+          next if new_mirrors[i].blank?
 
-          s.inreplace_string.sub!(inreplace_regex) do |block|
-            block = block.sub(
-              /^(#{leading_spaces}  url )"#{Regexp.escape(old_url)}"/,
-              "\\1\"#{new_url}\"",
-            )
+          formula_ast.replace_resource_stanza_value(resource_name, :mirror, new_mirrors.fetch(i),
+                                                    old_value: old_mirror)
+        end
 
-            resource.mirrors.each_with_index do |old_mirror, i|
-              next if new_mirrors[i].blank?
+        if (old_checksum = resource.checksum&.hexdigest).present?
+          formula_ast.replace_resource_stanza_value(resource_name, :sha256, new_hash, old_value: old_checksum)
+        end
 
-              block = block.sub(
-                /^(#{leading_spaces}  mirror )"#{Regexp.escape(old_mirror)}"/,
-                "\\1\"#{new_mirrors[i]}\"",
-              )
-            end
-
-            old_checksum = resource.checksum&.hexdigest
-            if old_checksum.present?
-              block = block.sub(
-                /^(#{leading_spaces}  sha256 )"#{old_checksum}"/,
-                "\\1\"#{new_hash}\"",
-              )
-            end
-
-            if forced_version
-              block = if block.match?(/^#{leading_spaces}  version "/)
-                block.sub(/^(#{leading_spaces}  version )"[^"]*"/, "\\1\"#{new_version}\"")
-              else
-                block.sub(
-                  /^(#{leading_spaces}  sha256 "[0-9a-f]+")\n/,
-                  "\\1\n#{leading_spaces}  version \"#{new_version}\"\n",
-                )
-              end
-            end
-
-            block
+        if forced_version
+          if formula_ast.resource_stanza?(resource_name, :version)
+            formula_ast.replace_resource_stanza_value(resource_name, :version, new_version)
+          else
+            formula_ast.add_stanzas_after(:sha256, [[:version, new_version]],
+                                          parent: formula_ast.resource(resource_name))
           end
         end
+
+        formula.path.atomic_write(formula_ast.process)
 
         :success
       end

@@ -4,25 +4,27 @@
 require "compilers"
 
 RSpec.describe CompilerFailure do
+  let(:klass) { CompilerFailure }
+
   alias_matcher :fail_with, :be_fails_with
 
   describe "::create" do
     it "creates a failure when given a symbol" do
-      failure = described_class.create(:clang)
+      failure = klass.create(:clang)
       expect(failure).to fail_with(
         instance_double(CompilerSelector::Compiler, "Compiler", type: :clang, name: :clang, version: 600),
       )
     end
 
     it "can be given a build number in a block" do
-      failure = described_class.create(:clang) { build 700 }
+      failure = klass.create(:clang) { build 700 }
       expect(failure).to fail_with(
         instance_double(CompilerSelector::Compiler, "Compiler", type: :clang, name: :clang, version: 700),
       )
     end
 
     it "can be given an empty block" do
-      failure = described_class.create(:clang) do
+      failure = klass.create(:clang) do
         # do nothing
       end
       expect(failure).to fail_with(
@@ -31,7 +33,7 @@ RSpec.describe CompilerFailure do
     end
 
     it "creates a failure when given a hash" do
-      failure = described_class.create(gcc: "7")
+      failure = klass.create(gcc: "7")
       expect(failure).to fail_with(
         instance_double(CompilerSelector::Compiler, "Compiler", type: :gcc, name: "gcc-7", version: Version.new("7")),
       )
@@ -48,7 +50,7 @@ RSpec.describe CompilerFailure do
     end
 
     it "creates a failure when given a hash and a block with aversion" do
-      failure = described_class.create(gcc: "7") { version "7.1" }
+      failure = klass.create(gcc: "7") { version "7.1" }
       expect(failure).to fail_with(
         instance_double(CompilerSelector::Compiler, "Compiler", type: :gcc, name: "gcc-7", version: Version.new("7")),
       )

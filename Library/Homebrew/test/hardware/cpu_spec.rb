@@ -4,6 +4,8 @@
 require "hardware"
 
 RSpec.describe Hardware::CPU do
+  let(:klass) { Hardware::CPU }
+
   describe "::type" do
     let(:cpu_types) do
       [
@@ -15,7 +17,7 @@ RSpec.describe Hardware::CPU do
     end
 
     it "returns the current CPU's type as a symbol, or :dunno if it cannot be detected" do
-      expect(cpu_types).to include(described_class.type)
+      expect(cpu_types).to include(klass.type)
     end
   end
 
@@ -33,12 +35,14 @@ RSpec.describe Hardware::CPU do
         :arm_brava,
         :arm_donan,
         :arm_firestorm_icestorm,
+        :arm_hidra,
         :arm_hurricane_zephyr,
         :arm_ibiza,
         :arm_lightning_thunder,
         :arm_lobos,
         :arm_monsoon_mistral,
         :arm_palma,
+        :arm_sotra,
         :arm_twister,
         :arm_typhoon,
         :arm_vortex_tempest,
@@ -81,27 +85,27 @@ RSpec.describe Hardware::CPU do
     end
 
     it "returns the current CPU's family name as a symbol, or :dunno if it cannot be detected" do
-      expect(cpu_families).to include described_class.family
+      expect(cpu_families).to include klass.family
     end
 
     context "when hw.cpufamily is 0x573b5eec on a Mac", :needs_macos do
       before do
-        allow(described_class)
+        allow(klass)
           .to receive(:sysctl_int)
           .with("hw.cpufamily")
           .and_return(0x573b5eec)
       end
 
       it "returns :arm_firestorm_icestorm on ARM" do
-        allow(described_class).to receive_messages(arm?: true, intel?: false)
+        allow(klass).to receive_messages(arm?: true, intel?: false)
 
-        expect(described_class.family).to eq(:arm_firestorm_icestorm)
+        expect(klass.family).to eq(:arm_firestorm_icestorm)
       end
 
       it "returns :westmere on Intel" do
-        allow(described_class).to receive_messages(arm?: false, intel?: true)
+        allow(klass).to receive_messages(arm?: false, intel?: true)
 
-        expect(described_class.family).to eq(:westmere)
+        expect(klass.family).to eq(:westmere)
       end
     end
   end

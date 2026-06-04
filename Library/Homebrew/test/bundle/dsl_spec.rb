@@ -1,12 +1,14 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "bundle"
 require "bundle/dsl"
 
 RSpec.describe Homebrew::Bundle::Dsl do
+  let(:klass) { Homebrew::Bundle::Dsl }
+
   def dsl_from_string(string)
-    described_class.new(StringIO.new(string))
+    klass.new(StringIO.new(string))
   end
 
   context "with a DSL example" do
@@ -25,6 +27,7 @@ RSpec.describe Homebrew::Bundle::Dsl do
         cask 'firefox', args: { appdir: '~/my-apps/Applications' }
         mas '1Password', id: 443987910
         vscode 'GitHub.codespaces'
+        winget 'PowerToys', id: 'XP89DCGQ3K6VLD', source: 'msstore'
         go 'github.com/charmbracelet/crush'
         cargo 'ripgrep'
         uv 'mkdocs', with: ['mkdocs-material<10']
@@ -32,7 +35,7 @@ RSpec.describe Homebrew::Bundle::Dsl do
     end
 
     before do
-      allow_any_instance_of(described_class).to receive(:system)
+      allow_any_instance_of(klass).to receive(:system)
         .with("/usr/libexec/java_home --failfast")
         .and_return(false)
     end
@@ -56,10 +59,12 @@ RSpec.describe Homebrew::Bundle::Dsl do
       expect(dsl.entries[9].name).to eql("1Password")
       expect(dsl.entries[9].options).to eql(id: 443_987_910)
       expect(dsl.entries[10].name).to eql("GitHub.codespaces")
-      expect(dsl.entries[11].name).to eql("github.com/charmbracelet/crush")
-      expect(dsl.entries[12].name).to eql("ripgrep")
-      expect(dsl.entries[13].name).to eql("mkdocs")
-      expect(dsl.entries[13].options).to eql(with: ["mkdocs-material<10"])
+      expect(dsl.entries[11].name).to eql("PowerToys")
+      expect(dsl.entries[11].options).to eql(id: "XP89DCGQ3K6VLD", source: "msstore")
+      expect(dsl.entries[12].name).to eql("github.com/charmbracelet/crush")
+      expect(dsl.entries[13].name).to eql("ripgrep")
+      expect(dsl.entries[14].name).to eql("mkdocs")
+      expect(dsl.entries[14].options).to eql(with: ["mkdocs-material<10"])
     end
   end
 
@@ -147,22 +152,37 @@ RSpec.describe Homebrew::Bundle::Dsl do
         dsl_from_string 'uv "mkdocs", with: false'
       end.to raise_error(RuntimeError, /options\[:with\].*Array of String objects/)
     end
+
+    it "errors on invalid winget options" do
+      expect do
+        dsl_from_string 'winget "PowerToys", id: 123'
+      end.to raise_error(RuntimeError, /options\[:id\].*String object/)
+      expect do
+        dsl_from_string 'winget "PowerToys", source: "chocolatey"'
+      end.to raise_error(RuntimeError, /options\[:source\].*one of/)
+      expect do
+        dsl_from_string 'winget "PowerToys", interactive: true'
+      end.to raise_error(RuntimeError, /unknown options\(\[:interactive\]\) for winget/)
+      expect do
+        dsl_from_string 'winget "PowerToys", elevated: true'
+      end.to raise_error(RuntimeError, /unknown options\(\[:elevated\]\) for winget/)
+    end
   end
 
   it ".sanitize_brew_name" do
-    expect(described_class.send(:sanitize_brew_name, "homebrew/homebrew/foo")).to eql("foo")
-    expect(described_class.send(:sanitize_brew_name, "homebrew/homebrew-bar/foo")).to eql("homebrew/bar/foo")
-    expect(described_class.send(:sanitize_brew_name, "homebrew/bar/foo")).to eql("homebrew/bar/foo")
-    expect(described_class.send(:sanitize_brew_name, "foo")).to eql("foo")
+    expect(klass.send(:sanitize_brew_name, "homebrew/homebrew/foo")).to eql("foo")
+    expect(klass.send(:sanitize_brew_name, "homebrew/homebrew-bar/foo")).to eql("homebrew/bar/foo")
+    expect(klass.send(:sanitize_brew_name, "homebrew/bar/foo")).to eql("homebrew/bar/foo")
+    expect(klass.send(:sanitize_brew_name, "foo")).to eql("foo")
   end
 
   it ".sanitize_tap_name" do
-    expect(described_class.send(:sanitize_tap_name, "homebrew/homebrew-foo")).to eql("homebrew/foo")
-    expect(described_class.send(:sanitize_tap_name, "homebrew/foo")).to eql("homebrew/foo")
+    expect(klass.send(:sanitize_tap_name, "homebrew/homebrew-foo")).to eql("homebrew/foo")
+    expect(klass.send(:sanitize_tap_name, "homebrew/foo")).to eql("homebrew/foo")
   end
 
   it ".sanitize_cask_name" do
-    expect(described_class.send(:sanitize_cask_name, "homebrew/cask-versions/adoptopenjdk8")).to eql("adoptopenjdk8")
-    expect(described_class.send(:sanitize_cask_name, "adoptopenjdk8")).to eql("adoptopenjdk8")
+    expect(klass.send(:sanitize_cask_name, "homebrew/cask-versions/adoptopenjdk8")).to eql("adoptopenjdk8")
+    expect(klass.send(:sanitize_cask_name, "adoptopenjdk8")).to eql("adoptopenjdk8")
   end
 end

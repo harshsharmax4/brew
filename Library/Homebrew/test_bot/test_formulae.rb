@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require "trust"
+
 module Homebrew
   module TestBot
     class TestFormulae < Test
@@ -32,6 +34,11 @@ module Homebrew
       end
 
       protected
+
+      sig { returns(T::Hash[String, String]) }
+      def require_current_tap_trust_env
+        { "HOMEBREW_REQUIRE_TAP_TRUST" => "1" }
+      end
 
       sig { returns(T.nilable(Pathname)) }
       def cached_event_json

@@ -8,7 +8,9 @@ require "utils/curl"
 require "utils/output"
 require "utils/path"
 require "extend/hash/keys"
+require "extend/ENV/sensitive"
 require "api"
+require "trust"
 
 module Cask
   # Loads a cask from various sources.
@@ -102,7 +104,9 @@ module Cask
       def load(config:)
         @config = config
 
-        instance_eval(content, __FILE__, __LINE__)
+        ENV.clear_sensitive_environment_for_eval! do
+          instance_eval(content, __FILE__, __LINE__)
+        end
       end
     end
 
@@ -161,6 +165,8 @@ module Cask
         raise CaskUnavailableError.new(token, "'#{path}' is not readable.") unless path.readable?
         raise CaskUnavailableError.new(token, "'#{path}' is not a file.")   unless path.file?
 
+        Homebrew::Trust.require_trusted_cask!(token, path)
+
         @content = path.read(encoding: "UTF-8")
         @config = config
 
@@ -187,8 +193,10 @@ module Cask
         end
 
         begin
-          instance_eval(content, path.to_s).tap do |cask|
-            raise CaskUnreadableError.new(token, "'#{path}' does not contain a cask.") unless cask.is_a?(Cask)
+          ENV.clear_sensitive_environment_for_eval! do
+            instance_eval(content, path.to_s).tap do |cask|
+              raise CaskUnreadableError.new(token, "'#{path}' does not contain a cask.") unless cask.is_a?(Cask)
+            end
           end
         rescue NameError, ArgumentError, ScriptError => e
           error = CaskUnreadableError.new(token, e.message)
@@ -710,7 +718,12 @@ module Cask
         end
       end
 
-      opoo "Cask #{old_token} was renamed to #{new_token}." if warn && old_token && new_token
+      if warn && old_token && new_token
+        destination_exists = find_cask_in_tap(token, tap).exist? ||
+                             (tap.core_cask_tap? && !Homebrew::EnvConfig.no_install_from_api? &&
+                              Homebrew::API.cask_tokens.include?(token))
+        opoo "Cask #{old_token} was renamed to #{new_token}." if destination_exists
+      end
 
       [token, tap, type]
     end

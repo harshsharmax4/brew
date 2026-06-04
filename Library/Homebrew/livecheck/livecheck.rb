@@ -43,7 +43,8 @@ module Homebrew
     private_class_method def self.livecheck_find_versions_parameters(strategy_class)
       @livecheck_find_versions_parameters ||= T.let({}, T.nilable(T::Hash[T::Class[Strategic], T::Array[Symbol]]))
       @livecheck_find_versions_parameters[strategy_class] ||=
-        T::Utils.signature_for_method(strategy_class.method(:find_versions)).parameters.map(&:second)
+        (T::Utils.signature_for_method(strategy_class.method(:find_versions))&.parameters ||
+         strategy_class.method(:find_versions).parameters).map(&:second)
     end
 
     # Uses `formulae_and_casks_to_check` to identify taps in use other than

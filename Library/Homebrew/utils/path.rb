@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 module Utils
+  # Helpers for Homebrew path handling and package path validation.
   module Path
     sig { params(parent: T.any(Pathname, String), child: T.any(Pathname, String)).returns(T::Boolean) }
     def self.child_of?(parent, child)
@@ -18,11 +19,11 @@ module Utils
       path_realpath = path.realpath.to_s
       path_string = path.to_s
 
-      allowed_paths = ["#{HOMEBREW_LIBRARY}/Taps/"]
+      allowed_paths = [trusted_package_root("#{HOMEBREW_LIBRARY}/Taps/")]
       allowed_paths << if package_type == :formula
-        "#{HOMEBREW_CELLAR}/"
+        trusted_package_root(HOMEBREW_CELLAR)
       else
-        "#{Cask::Caskroom.path}/"
+        trusted_package_root(Cask::Caskroom.path)
       end
 
       return true if !path_realpath.end_with?(".rb") && !path_string.end_with?(".rb")
@@ -49,5 +50,13 @@ module Utils
         path_string.count("/") != 2
       end
     end
+
+    sig { params(path: T.any(Pathname, String)).returns(String) }
+    def self.trusted_package_root(path)
+      Pathname(path).realpath.to_s
+    rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR
+      Pathname(path).expand_path.to_s
+    end
+    private_class_method :trusted_package_root
   end
 end

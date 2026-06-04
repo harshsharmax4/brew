@@ -12,6 +12,7 @@ module Homebrew
         EOS
         switch "-p", "--print-only",
                description: "Print the updated resource blocks instead of changing <formula>."
+        # odeprecated: remove in a future release.
         switch "-s", "--silent",
                description: "Suppress any output."
         switch "--ignore-errors",

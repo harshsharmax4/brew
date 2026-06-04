@@ -5,6 +5,8 @@ require "language/node"
 require "utils/shebang"
 
 RSpec.describe Language::Node::Shebang do
+  let(:klass) { Language::Node::Shebang }
+
   let(:file) { Tempfile.new("node-shebang") }
   let(:broken_file) { Tempfile.new("node-shebang") }
   let(:f) do
@@ -56,7 +58,7 @@ RSpec.describe Language::Node::Shebang do
   describe "#detected_node_shebang" do
     it "can be used to replace Node shebangs" do
       allow(Formulary).to receive(:factory).with(f[:node18].name).and_return(f[:node18])
-      Utils::Shebang.rewrite_shebang described_class.detected_node_shebang(f[:versioned_node_dep]), file.path
+      Utils::Shebang.rewrite_shebang klass.detected_node_shebang(f[:versioned_node_dep]), file.path
 
       expect(File.read(file)).to eq <<~EOS
         #!#{HOMEBREW_PREFIX/"opt/node@18/bin/node"}
@@ -68,7 +70,7 @@ RSpec.describe Language::Node::Shebang do
 
     it "can fix broken shebang like `#!node`" do
       allow(Formulary).to receive(:factory).with(f[:node18].name).and_return(f[:node18])
-      Utils::Shebang.rewrite_shebang described_class.detected_node_shebang(f[:versioned_node_dep]), broken_file.path
+      Utils::Shebang.rewrite_shebang klass.detected_node_shebang(f[:versioned_node_dep]), broken_file.path
 
       expect(File.read(broken_file)).to eq <<~EOS
         #!#{HOMEBREW_PREFIX/"opt/node@18/bin/node"}
@@ -79,12 +81,12 @@ RSpec.describe Language::Node::Shebang do
     end
 
     it "errors if formula doesn't depend on node" do
-      expect { Utils::Shebang.rewrite_shebang described_class.detected_node_shebang(f[:no_deps]), file.path }
+      expect { Utils::Shebang.rewrite_shebang klass.detected_node_shebang(f[:no_deps]), file.path }
         .to raise_error(ShebangDetectionError, "Cannot detect Node shebang: formula does not depend on Node.")
     end
 
     it "errors if formula depends on more than one node" do
-      expect { Utils::Shebang.rewrite_shebang described_class.detected_node_shebang(f[:multiple_deps]), file.path }
+      expect { Utils::Shebang.rewrite_shebang klass.detected_node_shebang(f[:multiple_deps]), file.path }
         .to raise_error(ShebangDetectionError, "Cannot detect Node shebang: formula has multiple Node dependencies.")
     end
   end

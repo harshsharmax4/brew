@@ -1,11 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/lines"
 
 RSpec.describe RuboCop::Cop::FormulaAuditStrict::MakeCheck do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
 
+  let(:klass) { RuboCop::Cop::FormulaAuditStrict::MakeCheck }
   let(:path) { HOMEBREW_TAP_DIRECTORY/"homebrew/homebrew-core" }
 
   before do

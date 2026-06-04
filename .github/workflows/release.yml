@@ -7,6 +7,7 @@ on:
       - "**"
     paths:
       - .github/workflows/release.yml
+      - Library/Homebrew/utils/macos_user.sh
       - package/**/*
   workflow_dispatch:
     inputs:
@@ -111,8 +112,24 @@ jobs:
 
           echo "version=${homebrew_version}" >> "${GITHUB_OUTPUT}"
 
-      - name: Copy Homebrew API cache to brew subdirectory
-        run: cp -vR ~/Library/Caches/Homebrew/api brew/cache_api
+      - name: Prepare Homebrew API cache for package
+        run: |
+          package_api_cache="${RUNNER_TEMP}/homebrew-api-cache"
+          rm -rvf ~/Library/Caches/Homebrew/api "${package_api_cache}"
+
+          # TODO: Remove this forced regular API refresh when the internal API is default.
+          # Developer mode currently downloads the internal API cache, but the package
+          # should keep shipping the regular API files until all installs use internal API.
+          unset HOMEBREW_DEVELOPER HOMEBREW_DEV_CMD_RUN HOMEBREW_USE_INTERNAL_API HOMEBREW_NO_INSTALL_FROM_API
+          HOMEBREW_UPDATE_SKIP_BREW=1 brew update --auto-update --verbose
+          mkdir -vp "${package_api_cache}"
+          cp -vR ~/Library/Caches/Homebrew/api/. "${package_api_cache}/"
+
+          # Run developer mode too so the package cache works with both current
+          # developer behaviour and the future internal API default.
+          HOMEBREW_DEVELOPER=1 HOMEBREW_UPDATE_SKIP_BREW=1 brew update --auto-update --verbose
+          cp -vR "${package_api_cache}/." ~/Library/Caches/Homebrew/api
+          cp -vR ~/Library/Caches/Homebrew/api brew/cache_api
 
       - name: Check installer Git safety
         run: |
@@ -127,13 +144,24 @@ jobs:
       - name: Open macOS keychain
         run: security list-keychain -d user -s "${RUNNER_TEMP}/${TEMPORARY_KEYCHAIN_FILE}"
 
+      - name: Prepare Homebrew installer scripts
+        run: |
+          installer_scripts="${RUNNER_TEMP}/homebrew-installer-scripts"
+          rm -rvf "${installer_scripts}"
+          mkdir -vp "${installer_scripts}"
+          cp -vp brew/package/scripts/preinstall \
+            brew/package/scripts/postinstall \
+            brew/Library/Homebrew/utils/macos_user.sh \
+            "${installer_scripts}/"
+          echo "HOMEBREW_INSTALLER_SCRIPTS=${installer_scripts}" >> "${GITHUB_ENV}"
+
       - name: Build Homebrew installer component package
         env:
           HOMEBREW_VERSION: ${{ steps.homebrew-version.outputs.version }}
         # Note: `Library/Homebrew/test/support/fixtures/` contains unsigned
         # binaries so it needs to be excluded from notarization.
         run: pkgbuild --root brew
-          --scripts brew/package/scripts
+          --scripts "${HOMEBREW_INSTALLER_SCRIPTS}"
           --identifier sh.brew.homebrew
           --version "${HOMEBREW_VERSION}"
           --install-location /opt/homebrew

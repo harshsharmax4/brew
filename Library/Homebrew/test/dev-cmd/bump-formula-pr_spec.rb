@@ -3,10 +3,12 @@
 
 require "cmd/shared_examples/args_parse"
 require "dev-cmd/bump-formula-pr"
+require "utils/pypi"
 
 RSpec.describe Homebrew::DevCmd::BumpFormulaPr do
-  subject(:bump_formula_pr) { described_class.new(["test"]) }
+  subject(:bump_formula_pr) { klass.new(["test"]) }
 
+  let(:klass) { Homebrew::DevCmd::BumpFormulaPr }
   let(:f) do
     formula("test") do
       url "https://brew.sh/test-1.2.3.tgz"
@@ -14,6 +16,51 @@ RSpec.describe Homebrew::DevCmd::BumpFormulaPr do
   end
 
   it_behaves_like "parseable arguments"
+
+  describe "#run" do
+    it "adds updated mirrors as string literals" do
+      formula_path = CoreTap.instance.new_formula_path("couchdb")
+      formula_path.dirname.mkpath
+      formula_path.write <<~RUBY
+        class Couchdb < Formula
+          url "https://www.apache.org/dyn/closer.lua?path=couchdb/source/3.5.1/apache-couchdb-3.5.1.tar.gz"
+          mirror "https://archive.apache.org/dist/couchdb/source/3.5.1/apache-couchdb-3.5.1.tar.gz"
+          sha256 "#{"a" * 64}"
+        end
+      RUBY
+      CoreTap.instance.clear_cache
+      Formulary.clear_cache
+      Formula.clear_cache
+      formula = Formulary.from_contents("couchdb", formula_path, formula_path.read)
+
+      resource_path = mktmpdir/"apache-couchdb-3.5.2.tar.gz"
+      resource_path.write("couchdb")
+      updated_mirror = "https://archive.apache.org/dist/couchdb/source/3.5.2/apache-couchdb-3.5.2.tar.gz"
+      command = klass.new(["--write-only", "--no-audit", "--version=3.5.2", "couchdb"])
+
+      allow(Homebrew).to receive(:install_bundler_gems!)
+      allow(CoreTap.instance).to receive_messages(allow_bump?: true, git?: true,
+                                                  remote_repository: "Homebrew/homebrew-core")
+      allow(command).to receive(:check_new_version)
+      allow(command).to receive(:fetch_resource_and_forced_version).and_return([resource_path, false])
+      allow(command).to receive_messages(run_audit: false, update_matching_version_resources!: {})
+      allow(PyPI).to receive(:update_python_resources!)
+      allow(Utils::Tar).to receive(:validate_file).with(resource_path)
+      allow(command.args.named).to receive(:to_formulae).and_return([formula])
+      allow(Formula).to receive(:[]).with("couchdb").and_return(formula)
+      expect_any_instance_of(Utils::AST::FormulaAST)
+        .to receive(:add_stable_stanzas_after) do |formula_ast, name, stanzas|
+        expect(name).to eq(:url)
+        expect(stanzas).to include([:mirror, "mirror #{updated_mirror.inspect}"])
+        formula_ast.add_stanzas_after(name, stanzas, parent: formula_ast.stanza(:stable, type: :block_call))
+      end
+
+      command.run
+
+      expect(formula_path.read).to include "  mirror #{updated_mirror.inspect}\n  " \
+                                           "sha256 #{resource_path.sha256.inspect}\n"
+    end
+  end
 
   describe "::check_throttle" do
     let(:tap) { Tap.fetch("test", "tap") }

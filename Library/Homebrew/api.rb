@@ -253,6 +253,84 @@ module Homebrew
     end
 
     sig {
+      params(
+        formulae:   T::Hash[String, T::Hash[String, T.untyped]],
+        regenerate: T::Boolean,
+      ).returns(T::Boolean)
+    }
+    def self.write_executables_file!(formulae, regenerate:)
+      executables_path = HOMEBREW_CACHE_API/"internal/executables.txt"
+      executables_lines = formulae.filter_map do |name, hash|
+        executables = T.cast(hash["executables"], T.nilable(T::Array[String]))
+        next if executables.blank?
+
+        "#{name}:#{executables.join(" ")}"
+      end
+      if executables_lines.empty?
+        begin
+          executables_path.unlink
+          return true
+        rescue Errno::ENOENT
+          return false
+        end
+      end
+
+      contents = "#{executables_lines.sort.join("\n")}\n"
+      cached_contents = begin
+        executables_path.read unless regenerate
+      rescue Errno::ENOENT
+        nil
+      end
+      if regenerate || cached_contents != contents
+        executables_path.dirname.mkpath
+        executables_path.write(contents)
+        return true
+      end
+
+      false
+    end
+
+    sig { params(target: Pathname).returns(T::Boolean) }
+    def self.download_executables_file_from_github_packages!(target)
+      github_packages_url = "https://ghcr.io/v2/homebrew/command-not-found/executables"
+      manifest_args = [
+        "--fail", "--location",
+        "--header", "Accept: application/vnd.oci.image.manifest.v1+json",
+        "#{github_packages_url}/manifests/latest"
+      ]
+      if HOMEBREW_GITHUB_PACKAGES_AUTH.present?
+        manifest_args.insert(-2, "--header", "Authorization: #{HOMEBREW_GITHUB_PACKAGES_AUTH}")
+      end
+
+      manifest_output = Utils::Curl.curl_output(*manifest_args, show_error: false)
+      return false unless manifest_output.success?
+
+      manifest = JSON.parse(manifest_output.stdout)
+      layers = T.cast(manifest.fetch("layers"), T::Array[T::Hash[String, T.untyped]])
+      layer = layers.find do |candidate|
+        candidate.dig("annotations", "org.opencontainers.image.title") == target.basename.to_s
+      end
+      return false if layer.nil?
+
+      digest = T.cast(layer["digest"], T.nilable(String))
+      return false if digest.blank?
+
+      download_args = ["--fail"]
+      if HOMEBREW_GITHUB_PACKAGES_AUTH.present?
+        download_args += ["--header", "Authorization: #{HOMEBREW_GITHUB_PACKAGES_AUTH}"]
+      end
+      download_args << "#{github_packages_url}/blobs/#{digest}"
+      target.dirname.mkpath
+      Utils::Curl.curl_download(*download_args, to: target, show_error: false)
+      FileUtils.touch(target)
+      true
+    rescue ErrorDuringExecution, JSON::ParserError, KeyError, TypeError
+      target.unlink if target.exist? && target.empty?
+
+      false
+    end
+
+    sig {
       params(json_data: T::Hash[String, T.untyped])
         .returns([T::Boolean, T.any(String, T::Array[T.untyped], T::Hash[String, T.untyped])])
     }

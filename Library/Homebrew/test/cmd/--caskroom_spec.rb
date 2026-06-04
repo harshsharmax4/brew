@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "cmd/--caskroom"
 require "cmd/shared_examples/args_parse"
 
 RSpec.describe Homebrew::Cmd::Caskroom do
+  let(:klass) { Homebrew::Cmd::Caskroom }
+
   it_behaves_like "parseable arguments"
 
   it "prints Homebrew's Caskroom", :integration_test do
@@ -14,11 +16,16 @@ RSpec.describe Homebrew::Cmd::Caskroom do
       .and be_a_success
   end
 
-  it "prints the Caskroom for Casks", :integration_test do
-    expect { brew "--caskroom", cask_path("local-transmission"), cask_path("local-caffeine") }
+  it "prints the Caskroom for Casks" do
+    cmd = klass.new(%w[local-transmission local-caffeine])
+    allow(cmd.args.named).to receive(:to_casks).and_return([
+      instance_double(Cask::Cask, token: "local-transmission"),
+      instance_double(Cask::Cask, token: "local-caffeine"),
+    ])
+
+    expect { cmd.run }
       .to output("#{HOMEBREW_PREFIX/"Caskroom"/"local-transmission"}\n" \
-                 "#{HOMEBREW_PREFIX/"Caskroom"/"local-caffeine\n"}").to_stdout
+                 "#{HOMEBREW_PREFIX/"Caskroom"/"local-caffeine"}\n").to_stdout
       .and not_to_output.to_stderr
-      .and be_a_success
   end
 end

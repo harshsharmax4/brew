@@ -4,11 +4,22 @@
 require "utils/git"
 
 RSpec.describe Utils::Git do
+  let(:klass) { Utils::Git }
+  let(:file) { "README.md" }
+  # Allow instance variables here for a simpler `before do` block.
+  # rubocop:disable RSpec/InstanceVariable
+  let(:file_hash_one) { @h1[0..6] }
+  let(:file_hash_two) { @h2[0..6] }
+  let(:files) { ["README.md", "LICENSE.txt"] }
+  let(:files_hash_one) { [@h3[0..6], ["LICENSE.txt"]] }
+  let(:files_hash_two) { [@h2[0..6], ["README.md"]] }
+  let(:cherry_pick_commit) { @cherry_pick_commit[0..6] }
+
   around do |example|
-    described_class.clear_available_cache
+    klass.clear_available_cache
     example.run
   ensure
-    described_class.clear_available_cache
+    klass.clear_available_cache
   end
 
   before do
@@ -44,26 +55,17 @@ RSpec.describe Utils::Git do
     end
   end
 
-  let(:file) { "README.md" }
-  # Allow instance variables here for a simpler `before do` block.
-  # rubocop:disable RSpec/InstanceVariable
-  let(:file_hash_one) { @h1[0..6] }
-  let(:file_hash_two) { @h2[0..6] }
-  let(:files) { ["README.md", "LICENSE.txt"] }
-  let(:files_hash_one) { [@h3[0..6], ["LICENSE.txt"]] }
-  let(:files_hash_two) { [@h2[0..6], ["README.md"]] }
-  let(:cherry_pick_commit) { @cherry_pick_commit[0..6] }
   # rubocop:enable RSpec/InstanceVariable
 
   describe "#cherry_pick!" do
     it "can cherry pick a commit" do
-      expect(described_class.cherry_pick!(HOMEBREW_CACHE, cherry_pick_commit)).to be_truthy
+      expect(klass.cherry_pick!(HOMEBREW_CACHE, cherry_pick_commit)).to be_truthy
     end
 
     it "aborts when cherry picking an existing hash" do
       ENV["GIT_MERGE_VERBOSITY"] = "5" # Consistent output across git versions
       expect do
-        described_class.cherry_pick!(HOMEBREW_CACHE, file_hash_one)
+        klass.cherry_pick!(HOMEBREW_CACHE, file_hash_one)
       end.to raise_error(ErrorDuringExecution, /Merge conflict in README.md/)
     end
   end
@@ -71,27 +73,27 @@ RSpec.describe Utils::Git do
   describe "#last_revision_commit_of_file" do
     it "gives last revision commit when before_commit is nil" do
       expect(
-        described_class.last_revision_commit_of_file(HOMEBREW_CACHE, file),
+        klass.last_revision_commit_of_file(HOMEBREW_CACHE, file),
       ).to eq(file_hash_one)
     end
 
     it "gives revision commit based on before_commit when it is not nil" do
       expect(
-        described_class.last_revision_commit_of_file(HOMEBREW_CACHE,
-                                                     file,
-                                                     before_commit: file_hash_two),
+        klass.last_revision_commit_of_file(HOMEBREW_CACHE,
+                                           file,
+                                           before_commit: file_hash_two),
       ).to eq(file_hash_two)
     end
   end
 
   describe "#file_at_commit" do
     it "returns file contents when file exists" do
-      expect(described_class.file_at_commit(HOMEBREW_CACHE, file, file_hash_one)).to eq("README")
+      expect(klass.file_at_commit(HOMEBREW_CACHE, file, file_hash_one)).to eq("README")
     end
 
     it "returns empty when file doesn't exist" do
-      expect(described_class.file_at_commit(HOMEBREW_CACHE, "foo.txt", file_hash_one)).to eq("")
-      expect(described_class.file_at_commit(HOMEBREW_CACHE, "LICENSE.txt", file_hash_one)).to eq("")
+      expect(klass.file_at_commit(HOMEBREW_CACHE, "foo.txt", file_hash_one)).to eq("")
+      expect(klass.file_at_commit(HOMEBREW_CACHE, "LICENSE.txt", file_hash_one)).to eq("")
     end
   end
 
@@ -99,7 +101,7 @@ RSpec.describe Utils::Git do
     context "when before_commit is nil" do
       it "gives last revision commit" do
         expect(
-          described_class.last_revision_commit_of_files(HOMEBREW_CACHE, files),
+          klass.last_revision_commit_of_files(HOMEBREW_CACHE, files),
         ).to eq(files_hash_one)
       end
     end
@@ -107,9 +109,9 @@ RSpec.describe Utils::Git do
     context "when before_commit is not nil" do
       it "gives last revision commit" do
         expect(
-          described_class.last_revision_commit_of_files(HOMEBREW_CACHE,
-                                                        files,
-                                                        before_commit: file_hash_two),
+          klass.last_revision_commit_of_files(HOMEBREW_CACHE,
+                                              files,
+                                              before_commit: file_hash_two),
         ).to eq(files_hash_two)
       end
     end
@@ -118,55 +120,55 @@ RSpec.describe Utils::Git do
   describe "#last_revision_of_file" do
     it "returns last revision of file" do
       expect(
-        described_class.last_revision_of_file(HOMEBREW_CACHE,
-                                              HOMEBREW_CACHE/file),
+        klass.last_revision_of_file(HOMEBREW_CACHE,
+                                    HOMEBREW_CACHE/file),
       ).to eq("README")
     end
 
     it "returns last revision of file based on before_commit" do
       expect(
-        described_class.last_revision_of_file(HOMEBREW_CACHE, HOMEBREW_CACHE/file,
-                                              before_commit: "0..3"),
+        klass.last_revision_of_file(HOMEBREW_CACHE, HOMEBREW_CACHE/file,
+                                    before_commit: "0..3"),
       ).to eq("# README")
     end
   end
 
   describe "::available?" do
     it "returns true if git --version command succeeds" do
-      expect(described_class).to be_available
+      expect(klass).to be_available
     end
 
     it "returns false if git --version command does not succeed" do
       stub_const("HOMEBREW_SHIMS_PATH", HOMEBREW_PREFIX/"bin/shim")
-      expect(described_class).not_to be_available
+      expect(klass).not_to be_available
     end
   end
 
   describe "::path" do
     it "returns nil when git is not available" do
       stub_const("HOMEBREW_SHIMS_PATH", HOMEBREW_PREFIX/"bin/shim")
-      expect(described_class.path).to be_nil
+      expect(klass.path).to be_nil
     end
 
     it "returns path of git when git is available" do
-      expect(described_class.path).to end_with("git")
+      expect(klass.path).to end_with("git")
     end
   end
 
   describe "::version" do
     it "returns null when git is not available" do
       stub_const("HOMEBREW_SHIMS_PATH", HOMEBREW_PREFIX/"bin/shim")
-      expect(described_class.version).to be Version::NULL
+      expect(klass.version).to be Version::NULL
     end
 
     it "returns version of git when git is available" do
-      expect(described_class.version).to be > Version::NULL
+      expect(klass.version).to be > Version::NULL
     end
   end
 
   describe "::ensure_installed!" do
     it "doesn't fail if git already available" do
-      expect { described_class.ensure_installed! }.not_to raise_error
+      expect { klass.ensure_installed! }.not_to raise_error
     end
 
     context "when git is not already available" do
@@ -176,24 +178,31 @@ RSpec.describe Utils::Git do
 
       it "can't install brewed git if homebrew/core is unavailable" do
         allow_any_instance_of(Pathname).to receive(:directory?).and_return(false)
-        expect { described_class.ensure_installed! }.to raise_error("Git is unavailable")
+        expect { klass.ensure_installed! }.to raise_error("Git is unavailable")
       end
 
       it "raises error if can't install git" do
-        stub_const("HOMEBREW_BREW_FILE", HOMEBREW_PREFIX/"bin/brew")
-        expect { described_class.ensure_installed! }.to raise_error("Git is unavailable")
+        allow(CoreTap.instance).to receive(:installed?).and_return(true)
+        formula_double = instance_double(Formula)
+        allow(Formula).to receive(:[]).with("git").and_return(formula_double)
+        allow(formula_double).to receive(:ensure_installed!).with(executable: "git").and_raise(RuntimeError)
+
+        expect { klass.ensure_installed! }.to raise_error("Git is unavailable")
       end
 
       unless ENV["HOMEBREW_TEST_GENERIC_OS"]
-        it "installs git" do
-          expect(described_class).to receive(:available?).and_return(false)
+        it "keeps using the git shim after the formula install helper" do
+          expect(klass).to receive(:available?).and_return(false)
           allow(CoreTap.instance).to receive(:installed?).and_return(true)
           formula_double = instance_double(Formula)
           allow(Formula).to receive(:[]).with("git").and_return(formula_double)
-          allow(formula_double).to receive(:ensure_installed!).and_return(formula_double)
-          expect(described_class).to receive(:available?).and_return(true)
+          allow(formula_double).to receive(:ensure_installed!).with(executable: "git")
+                                                              .and_return(Pathname.new("/usr/bin/git"))
+          expect(klass).to receive(:available?).and_return(true)
 
-          described_class.ensure_installed!
+          klass.ensure_installed!
+
+          expect(klass.git).to eq(HOMEBREW_SHIMS_PATH/"shared/git")
         end
       end
     end
@@ -202,7 +211,7 @@ RSpec.describe Utils::Git do
   describe "::remote_exists?" do
     it "returns true when git is not available" do
       stub_const("HOMEBREW_SHIMS_PATH", HOMEBREW_PREFIX/"bin/shim")
-      expect(described_class).to be_remote_exists("blah")
+      expect(klass).to be_remote_exists("blah")
     end
 
     context "when git is available" do
@@ -217,11 +226,11 @@ RSpec.describe Utils::Git do
           system git, "remote", "add", "origin", url
         end
 
-        expect(described_class).to be_remote_exists(url)
+        expect(klass).to be_remote_exists(url)
       end
 
       it "returns false when git remote does not exist" do
-        expect(described_class).not_to be_remote_exists("blah")
+        expect(klass).not_to be_remote_exists("blah")
       end
     end
   end

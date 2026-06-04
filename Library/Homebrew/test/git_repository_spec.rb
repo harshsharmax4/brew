@@ -1,11 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "git_repository"
 
 RSpec.describe GitRepository do
-  subject(:git_repo) { described_class.new(clone_path) }
+  subject(:git_repo) { klass.new(clone_path) }
 
+  let(:klass) { GitRepository }
   let(:branch_name) { "main" }
   let(:tag_name) { branch_name }
   let(:repo_root) { mktmpdir }

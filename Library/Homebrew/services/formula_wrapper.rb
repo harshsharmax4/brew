@@ -67,6 +67,13 @@ module Homebrew
         @keep_alive ||= false
       end
 
+      sig { returns(T::Array[Pathname]) }
+      def path_dirs
+        return [] unless service?
+
+        load_service.path_dirs
+      end
+
       # service_name delegates with formula.plist_name or formula.service_name
       # for systemd (e.g., `homebrew.<formula>`).
       sig { returns(String) }

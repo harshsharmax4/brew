@@ -13,8 +13,8 @@ module Homebrew
       BANNER_NAME = "Flatpak packages"
 
       class << self
-        sig { override.returns(String) }
-        def switch_description
+        sig { override.params(description: String).returns(String) }
+        def switch_description(description)
           "#{super} Note: Linux only."
         end
 

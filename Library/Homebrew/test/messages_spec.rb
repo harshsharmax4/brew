@@ -1,11 +1,13 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "messages"
 require "spec_helper"
 
 RSpec.describe Messages do
-  let(:messages) { described_class.new }
+  let(:klass) { Messages }
+
+  let(:messages) { klass.new }
   let(:test_formula) { formula("foo") { url("https://brew.sh/foo-0.1.tgz") } }
   let(:elapsed_time) { 1.1 }
 

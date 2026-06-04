@@ -1,14 +1,14 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "livecheck/strategy"
 
 RSpec.describe Homebrew::Livecheck::Strategy do
-  subject(:strategy) { described_class }
+  subject(:strategy) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Strategy }
   let(:url) { "https://brew.sh/" }
   let(:redirection_url) { "https://brew.sh/redirection" }
-
   let(:post_hash) do
     {
       empty:   "",
@@ -19,7 +19,6 @@ RSpec.describe Homebrew::Livecheck::Strategy do
   end
   let(:form_string) { "empty=&boolean=true&number=1&string=a+%2B+b+%3D+c" }
   let(:json_string) { '{"empty":"","boolean":"true","number":"1","string":"a + b = c"}' }
-
   let(:response_hash) do
     response_hash = {}
 
@@ -52,7 +51,6 @@ RSpec.describe Homebrew::Livecheck::Strategy do
 
     response_hash
   end
-
   let(:body) do
     <<~HTML
       <!DOCTYPE html>
@@ -69,7 +67,6 @@ RSpec.describe Homebrew::Livecheck::Strategy do
       </html>
     HTML
   end
-
   let(:response_text) do
     response_text = {}
 
@@ -398,6 +395,9 @@ RSpec.describe Homebrew::Livecheck::Strategy do
     it "returns an array of version strings when given a valid value" do
       expect(strategy.handle_block_return("1.2.3")).to eq(["1.2.3"])
       expect(strategy.handle_block_return(["1.2.3", "1.2.4"])).to eq(["1.2.3", "1.2.4"])
+      expect(strategy.handle_block_return([Version.new("1.2.3"), "1.2.4"])).to eq(["1.2.3", "1.2.4"])
+      expect(strategy.handle_block_return([Version.new("1.2.3"), nil, "1.2.4"])).to eq(["1.2.3", "1.2.4"])
+      expect(strategy.handle_block_return([Version.new("1.2.3"), "1.2.3", nil, "1.2.4"])).to eq(["1.2.3", "1.2.4"])
     end
 
     it "returns an empty array when given a nil value" do
@@ -406,7 +406,7 @@ RSpec.describe Homebrew::Livecheck::Strategy do
 
     it "errors when given an invalid value" do
       expect { strategy.handle_block_return(123) }
-        .to raise_error(TypeError, strategy::INVALID_BLOCK_RETURN_VALUE_MSG)
+        .to raise_error(TypeError, Homebrew::Livecheck::Strategy::INVALID_BLOCK_RETURN_VALUE_MSG)
     end
   end
 end

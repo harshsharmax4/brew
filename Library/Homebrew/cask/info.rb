@@ -23,11 +23,13 @@ module Cask
         output << "#{deprecate_disable}\n"
       end
       output << "#{installation_info(cask, installed:)}\n"
+      metadata = Homebrew::Cmd::Info.metadata_lines(cask)
+      output << "#{metadata.join("\n")}\n" if metadata.present?
       repo = repo_info(cask)
       output << "#{repo}\n" if repo
-      deps = deps_info(cask)
+      deps = deps_info(cask, mark_uninstalled: installed)
       output << deps if deps
-      requirements = requirements_info(cask)
+      requirements = requirements_info(cask, mark_uninstalled: installed)
       output << requirements if requirements
       language = language_info(cask)
       output << language if language
@@ -82,19 +84,27 @@ module Cask
       info.join("\n")
     end
 
-    sig { params(cask: Cask).returns(T.nilable(String)) }
-    def self.deps_info(cask)
+    sig { params(cask: Cask, mark_uninstalled: T::Boolean).returns(T.nilable(String)) }
+    def self.deps_info(cask, mark_uninstalled: true)
       depends_on = cask.depends_on
 
       formula_deps = Array(depends_on[:formula]).map do |dep|
         name = dep.to_s
         rack = HOMEBREW_CELLAR/::Utils.name_from_full_name(name)
-        decorate_dependency(name, installed: rack.directory? && !rack.subdirs.empty?)
+        decorate_dependency(
+          name,
+          installed:        rack.directory? && !rack.subdirs.empty?,
+          mark_uninstalled:,
+        )
       end
 
       cask_deps = Array(depends_on[:cask]).map do |dep|
         name = dep.to_s
-        decorate_dependency("#{name} (cask)", installed: (Caskroom.path/name).directory?)
+        decorate_dependency(
+          "#{name} (cask)",
+          installed:        (Caskroom.path/name).directory?,
+          mark_uninstalled:,
+        )
       end
 
       all_deps = formula_deps + cask_deps
@@ -123,13 +133,13 @@ module Cask
       "#{lines.join("\n")}\n"
     end
 
-    sig { params(dep: String, installed: T::Boolean).returns(String) }
-    def self.decorate_dependency(dep, installed:)
-      installed ? pretty_installed(dep) : pretty_uninstalled(dep)
+    sig { params(dep: String, installed: T::Boolean, mark_uninstalled: T::Boolean).returns(String) }
+    def self.decorate_dependency(dep, installed:, mark_uninstalled: true)
+      pretty_install_status(dep, installed:, mark_uninstalled:)
     end
 
-    sig { params(cask: Cask).returns(T.nilable(String)) }
-    def self.requirements_info(cask)
+    sig { params(cask: Cask, mark_uninstalled: T::Boolean).returns(T.nilable(String)) }
+    def self.requirements_info(cask, mark_uninstalled: true)
       require "cask_dependent"
 
       requirements = CaskDependent.new(cask).requirements.grep_v(CaskDependent::Requirement)
@@ -158,8 +168,11 @@ module Cask
           else
             requirement.display_s
           end
-          installed = requirement.satisfied?
-          installed ? pretty_installed(requirement_s) : pretty_uninstalled(requirement_s)
+          pretty_install_status(
+            requirement_s,
+            installed:        requirement.satisfied?,
+            mark_uninstalled:,
+          )
         end.join(", ")}\n"
       end
       output

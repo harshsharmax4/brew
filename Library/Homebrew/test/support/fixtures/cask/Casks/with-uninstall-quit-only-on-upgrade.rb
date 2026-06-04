@@ -9,7 +9,6 @@ cask "with-uninstall-quit-only-on-upgrade" do
 
   pkg "MyFancyPkg/Fancy.pkg"
 
-  uninstall quit:       "my.fancy.package.app",
-            signal:     [["TERM", "my.fancy.package.app"]],
-            on_upgrade: :quit
+  uninstall quit:   "my.fancy.package.app",
+            signal: [["TERM", "my.fancy.package.app"]]
 end

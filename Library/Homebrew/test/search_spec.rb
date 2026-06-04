@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "search"
@@ -6,17 +6,19 @@ require "descriptions"
 require "cmd/desc"
 
 RSpec.describe Homebrew::Search do
+  let(:klass) { Homebrew::Search }
+
   describe "#query_regexp" do
     it "correctly parses a regex query" do
-      expect(described_class.query_regexp("/^query$/")).to eq(/^query$/)
+      expect(klass.query_regexp("/^query$/")).to eq(/^query$/)
     end
 
     it "returns the original string if it is not a regex query" do
-      expect(described_class.query_regexp("query")).to eq("query")
+      expect(klass.query_regexp("query")).to eq("query")
     end
 
     it "raises an error if the query is an invalid regex" do
-      expect { described_class.query_regexp("/+/") }.to raise_error(/not a valid regex/)
+      expect { klass.query_regexp("/+/") }.to raise_error(/not a valid regex/)
     end
   end
 
@@ -27,25 +29,25 @@ RSpec.describe Homebrew::Search do
       let(:collection) { [["with-dashes", "withdashes"]] }
 
       it "searches by the selected argument" do
-        expect(described_class.search(collection, /withdashes/) { |_, short_name| short_name }).not_to be_empty
-        expect(described_class.search(collection, /withdashes/) { |long_name, _| long_name }).to be_empty
+        expect(klass.search(collection, /withdashes/) { |_, short_name| short_name }).not_to be_empty
+        expect(klass.search(collection, /withdashes/) { |long_name, _| long_name }).to be_empty
       end
     end
 
     context "when given a regex" do
       it "does not simplify strings" do
-        expect(described_class.search(collection, /with-dashes/)).to eq ["with-dashes"]
+        expect(klass.search(collection, /with-dashes/)).to eq ["with-dashes"]
       end
     end
 
     context "when given a string" do
       it "simplifies both the query and searched strings" do
-        expect(described_class.search(collection, "with dashes")).to eq ["with-dashes"]
+        expect(klass.search(collection, "with dashes")).to eq ["with-dashes"]
       end
 
       it "does not simplify strings with @ and + characters" do
-        expect(described_class.search(collection, "with@alpha")).to eq ["with@alpha"]
-        expect(described_class.search(collection, "with+plus")).to eq ["with+plus"]
+        expect(klass.search(collection, "with@alpha")).to eq ["with@alpha"]
+        expect(klass.search(collection, "with+plus")).to eq ["with+plus"]
       end
     end
 
@@ -53,14 +55,14 @@ RSpec.describe Homebrew::Search do
       let(:collection) { { "foo" => "bar" } }
 
       it "returns a Hash" do
-        expect(described_class.search(collection, "foo")).to eq "foo" => "bar"
+        expect(klass.search(collection, "foo")).to eq "foo" => "bar"
       end
 
       context "with a nil value" do
         let(:collection) { { "foo" => nil } }
 
         it "does not raise an error" do
-          expect(described_class.search(collection, "foo")).to eq "foo" => nil
+          expect(klass.search(collection, "foo")).to eq "foo" => nil
         end
       end
     end
@@ -84,23 +86,23 @@ RSpec.describe Homebrew::Search do
 
     it "annotates deprecated formulae" do
       allow(formula).to receive(:deprecated?).and_return(true)
-      expect(described_class.search_formulae(/testball/)).to contain_exactly(match(/\(deprecated\)/))
+      expect(klass.search_formulae(/testball/)).to contain_exactly(match(/\(deprecated\)/))
     end
 
     it "annotates disabled formulae" do
       allow(formula).to receive(:disabled?).and_return(true)
-      expect(described_class.search_formulae(/testball/)).to contain_exactly(match(/\(disabled\)/))
+      expect(klass.search_formulae(/testball/)).to contain_exactly(match(/\(disabled\)/))
     end
 
     it "does not annotate normal formulae" do
-      expect(described_class.search_formulae(/testball/)).to eq(["testball"])
+      expect(klass.search_formulae(/testball/)).to eq(["testball"])
     end
 
     it "shows only the installed icon for installed formulae" do
       allow(formula).to receive_messages(any_version_installed?: true, pinned?: true)
 
-      expect(described_class.search_formulae(/testball/))
-        .to eq([described_class.pretty_installed("testball")])
+      expect(klass.search_formulae(/testball/))
+        .to eq([klass.pretty_installed("testball")])
     end
   end
 
@@ -121,29 +123,29 @@ RSpec.describe Homebrew::Search do
 
     it "annotates deprecated casks", :needs_macos do
       allow(cask).to receive(:deprecated?).and_return(true)
-      expect(described_class.search_casks(/testball/)).to contain_exactly(match(/\(deprecated\)/))
+      expect(klass.search_casks(/testball/)).to contain_exactly(match(/\(deprecated\)/))
     end
 
     it "annotates disabled casks", :needs_macos do
       allow(cask).to receive(:disabled?).and_return(true)
-      expect(described_class.search_casks(/testball/)).to contain_exactly(match(/\(disabled\)/))
+      expect(klass.search_casks(/testball/)).to contain_exactly(match(/\(disabled\)/))
     end
 
     it "does not annotate normal casks", :needs_macos do
-      expect(described_class.search_casks(/testball/)).to eq(["testball"])
+      expect(klass.search_casks(/testball/)).to eq(["testball"])
     end
 
     it "hides macOS-only casks on Linux", :needs_linux do
       allow(cask).to receive(:supports_linux?).and_return(false)
 
-      expect(described_class.search_casks(/testball/)).to eq([])
+      expect(klass.search_casks(/testball/)).to eq([])
     end
 
     it "shows only the installed icon for installed casks", :needs_macos do
       allow(cask).to receive(:installed?).and_return(true)
 
-      expect(described_class.search_casks(/testball/))
-        .to eq([described_class.pretty_installed("testball")])
+      expect(klass.search_casks(/testball/))
+        .to eq([klass.pretty_installed("testball")])
     end
   end
 
@@ -165,12 +167,26 @@ RSpec.describe Homebrew::Search do
       end
 
       it "searches formula descriptions" do
-        expect { described_class.search_descriptions(described_class.query_regexp("some"), args) }
+        expect { klass.search_descriptions(klass.query_regexp("some"), args) }
           .to output(/testball: Some test/).to_stdout
       end
 
+      it "searches all trusted descriptions with tap trust enabled" do
+        cache_store = instance_double(DescriptionCacheStore)
+        allow(DescriptionCacheStore).to receive(:new).and_return(cache_store)
+        allow(CacheStoreDatabase).to receive(:use).with(:descriptions).and_yield(instance_double(CacheStoreDatabase))
+        expect(Descriptions).to receive(:search)
+          .with("some", Descriptions::SearchField::Description, cache_store, eval_all: true)
+          .and_return(instance_double(Descriptions, print: nil))
+
+        with_env(HOMEBREW_REQUIRE_TAP_TRUST: "1") do
+          args = Homebrew::Cmd::Desc.new(["--formula", "min_arg_placeholder"]).args
+          klass.search_descriptions("some", args)
+        end
+      end
+
       it "searches cask descriptions", :needs_macos do
-        expect { described_class.search_descriptions(described_class.query_regexp("ball"), args) }
+        expect { klass.search_descriptions(klass.query_regexp("ball"), args) }
           .to output(/testball: \(Test Ball\) Some test/).to_stdout
           .and not_to_output(/testball: Some test/).to_stdout
       end

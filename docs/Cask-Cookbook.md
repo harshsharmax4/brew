@@ -94,12 +94,16 @@ Having a common order for stanzas makes casks easier to update and parse. Below 
     stage_only
 
     preflight
+    preflight_steps
 
     postflight
+    postflight_steps
 
     uninstall_preflight
+    uninstall_preflight_steps
 
     uninstall_postflight
+    uninstall_postflight_steps
 
     uninstall
 
@@ -142,6 +146,7 @@ Each cask must declare one or more [artifacts](/rubydoc/Cask/Artifact.html) (i.e
 | `bash_completion`                | yes                           | Relative path to a Bash completion file that should be linked into the `$(brew --prefix)/etc/bash_completion.d` folder on installation. |
 | `fish_completion`                | yes                           | Relative path to a fish completion file that should be linked into the `$(brew --prefix)/share/fish/vendor_completions.d` folder on installation. |
 | `zsh_completion`                 | yes                           | Relative path to a Zsh completion file that should be linked into the `$(brew --prefix)/share/zsh/site-functions` folder on installation. |
+| `generate_completions_from_executable` | yes                      | Command and arguments used to generate shell completions from an executable at installation time. |
 | `colorpicker`                    | yes                           | Relative path to a ColorPicker plugin that should be moved into the `~/Library/ColorPickers` folder on installation. |
 | `dictionary`                     | yes                           | Relative path to a Dictionary that should be moved into the `~/Library/Dictionaries` folder on installation. |
 | `font`                           | yes                           | Relative path to a Font that should be moved into the `~/Library/Fonts` folder on installation. |
@@ -158,6 +163,16 @@ Each cask must declare one or more [artifacts](/rubydoc/Cask/Artifact.html) (i.e
 | `artifact`                       | yes                           | Relative path to an arbitrary path that should be moved on installation. Must provide an absolute path as a `target`. (Example: [free-gpgmail.rb](https://github.com/Homebrew/homebrew-cask/blob/b3c438d608d9702380edf10d5495e0727cf17108/Casks/f/free-gpgmail.rb#L44)) This is only for unusual cases; the `app` stanza is strongly preferred when moving `.app` bundles. |
 | `stage_only`                     | no                            | `true`. Asserts that the cask contains no activatable artifacts. |
 
+### Cask artifact trust and sandboxing
+
+Homebrew treats cask installation artifacts as trusted vendor installation actions once the cask has been accepted. Artifact stanzas such as [`app`](#stanza-app), [`pkg`](#stanza-pkg) and [`installer script`](#installer-script) are expected to install software and may write outside the Caskroom through Homebrew-managed moves, macOS installer services or vendor installer code.
+
+Generated completion artifacts are different: `generate_completions_from_executable` runs an installed executable only to produce shell completion text. That execution is sandboxed where Homebrew has an available sandbox. The sandbox allows reading the staged cask, writing temporary/cache files and blocks network access. This limits side effects from commands that should only print completion data.
+
+`installer script:` is not sandboxed. Many installer scripts are vendor installers that require broad filesystem writes, macOS services or `sudo`; macOS sandboxing does not work for root processes, and narrowing the write allowlist to the Caskroom plus uninstall or zap paths would break installers that legitimately write elsewhere. It would also change documented `SystemCommand` behaviours such as `sudo:`, `must_succeed:` and output handling.
+
+`pkg` artifacts are not run in the cask sandbox either. They are installed by macOS `/usr/sbin/installer`, which applies package payloads, scripts and receipts according to the package metadata.
+
 ### Optional stanzas
 
 | name                                       | multiple occurrences allowed? | value |
@@ -168,9 +183,13 @@ Each cask must declare one or more [artifacts](/rubydoc/Cask/Artifact.html) (i.e
 | [`deprecate!`](#stanza-deprecate--disable) | no                            | Date as a string in `YYYY-MM-DD` format and a string or symbol providing a reason. |
 | [`disable!`](#stanza-deprecate--disable)   | no                            | Date as a string in `YYYY-MM-DD` format and a string or symbol providing a reason. |
 | `preflight`                                | yes                           | Ruby block containing preflight install operations (needed only in very rare cases). |
+| `preflight_steps`                          | yes                           | Declarative file preparation steps run before artifact installation. |
 | [`postflight`](#stanza-flight)             | yes                           | Ruby block containing postflight install operations. |
+| `postflight_steps`                         | yes                           | Declarative file preparation steps run after artifact installation. |
 | `uninstall_preflight`                      | yes                           | Ruby block containing preflight uninstall operations (needed only in very rare cases). |
+| `uninstall_preflight_steps`                | yes                           | Declarative file preparation steps run before artifact uninstallation. |
 | `uninstall_postflight`                     | yes                           | Ruby block containing postflight uninstall operations. |
+| `uninstall_postflight_steps`               | yes                           | Declarative file preparation steps run after artifact uninstallation. |
 | [`language`](#stanza-language)             | required                      | Ruby block, called with language code parameters, containing other stanzas and/or a return value. |
 | `container nested:`                        | no                            | Relative path to an inner container that must be extracted before moving on with the installation. This allows for support of `.dmg` inside `.tar`, `.zip` inside `.dmg`, etc. (Example: [blocs.rb](https://github.com/Homebrew/homebrew-cask/blob/aa461148bbb5119af26b82cccf5003e2b4e50d95/Casks/b/blocs.rb#L17-L19)) |
 | `container type:`                          | no                            | Symbol to override container-type autodetect. May be one of: `:air`, `:bz2`, `:cab`, `:dmg`, `:generic_unar`, `:gzip`, `:otf`, `:pkg`, `:rar`, `:seven_zip`, `:sit`, `:tar`, `:ttf`, `:xar`, `:zip`, `:naked`. (Example: [parse.rb](https://github.com/Homebrew/homebrew-cask/blob/aa461148bbb5119af26b82cccf5003e2b4e50d95/Casks/p/parse.rb#L10)) |
@@ -544,6 +563,38 @@ Refer to [Deprecating, Disabling and Removing](Deprecating-Disabling-and-Removin
 
 The stanzas `preflight`, `postflight`, `uninstall_preflight`, and `uninstall_postflight` define operations to be run before or after installation or uninstallation.
 
+For simple file preparation, prefer `preflight_steps`, `postflight_steps`, `uninstall_preflight_steps` or `uninstall_postflight_steps`. These steps are stored in the JSON API and avoid loading cask Ruby for common operations.
+
+```ruby
+preflight_steps do
+  mkdir_p "Shared"
+  touch "Shared/state"
+end
+
+postflight_steps do
+  mv "payload", "Shared/payload"
+  ln_s "Shared/payload", "Payload", source_base: :relative
+end
+```
+
+A steps block may only contain supported step calls with literal arguments; it cannot call the wider cask DSL or arbitrary Ruby code. Each phase may define either its Ruby flight block or its matching steps block, not both.
+
+#### File preparation steps
+
+Relative paths default to `staged_path` for `base:`, `source_base:` and `target_base:`. Symlink steps can use `uninstall: true` to remove the symlink during uninstall.
+
+* `mkdir`: create one directory; example: `mkdir "Shared"`.
+* `mkdir_p`: create a directory and any missing parents; example: `mkdir_p "Shared"`.
+* `touch`: create or update a file timestamp; example: `touch "Shared/state"`.
+* `move`: move one file or directory; example: `move "payload", "Shared/payload"`.
+* `mv`: alias for `move`; example: `mv "payload", "Shared/payload"`.
+* `move_children`: move the contents of one directory into another; example: `move_children "payload", "Shared/payload"`.
+* `symlink`: create a symlink; example: `symlink "Shared/payload", "Payload", source_base: :relative`.
+* `ln_s`: alias for `symlink`; example: `ln_s "Shared/payload", "Payload", source_base: :relative`.
+* `ln_sf`: create or replace a symlink; example: `ln_sf "Shared/payload", "Payload", source_base: :relative, uninstall: true`.
+
+Flight blocks are not currently run in the cask sandbox. They should be written as though they may be sandboxed in the future: prefer the mini-DSL helpers below and keep filesystem writes limited to paths owned by the cask.
+
 #### Evaluation of blocks is always deferred
 
 The Ruby blocks defined by these stanzas are not evaluated until install time or uninstall time. Within a block you may refer to the `@cask` instance variable, and invoke [any method available on `@cask`](/rubydoc/Cask/Cask.html).
@@ -588,6 +639,8 @@ installer manual: "RubyMotion Installer.app"
 | `print_stderr:` | set to `false` to suppress `stderr` output |
 | `print_stdout:` | set to `false` to suppress `stdout` output |
 | `sudo:`         | set to `true` if the script needs *sudo* |
+
+Installer scripts run without the cask sandbox. Use them only when the vendor provides an installer command that cannot be represented by a more specific artifact stanza such as [`app`](#stanza-app) or [`pkg`](#stanza-pkg).
 
 The path may be absolute, or relative to the cask. Example (from [miniforge.rb](https://github.com/Homebrew/homebrew-cask/blob/864f623e2cd17dbde5987a7b3923fdb0b4ac9ee5/Casks/m/miniforge.rb#L23-L26)):
 
@@ -813,9 +866,9 @@ The easiest and most useful `uninstall` directive is [`pkgutil:`](#uninstall-pkg
 
 * **`early_script:`** (string or hash) - like [`script:`](#uninstall-script), but runs early (for special cases, best avoided)
 * [`launchctl:`](#uninstall-launchctl) (string or array) - IDs of `launchd` jobs to remove
-* [`quit:`](#uninstall-quit) (string or array) - bundle IDs of running applications to quit (does not run when uninstall is initiated by `brew upgrade` or `brew reinstall` unless specified in `on_upgrade:`)
+* [`quit:`](#uninstall-quit) (string or array) - bundle IDs of running applications to quit
 * [`signal:`](#uninstall-signal) (array of arrays) - signal numbers and bundle IDs of running applications to send a Unix signal to, for when `quit:` does not work (does not run when uninstall is initiated by `brew upgrade` or `brew reinstall` unless specified in `on_upgrade:`)
-* **`on_upgrade:`** (symbol or array) - symbols of uninstall keys (either `:quit` or `:signal`) to optionally run also during `brew upgrade` and `brew reinstall`
+* **`on_upgrade:`** (symbol or array) - set to `:signal` (or `[:signal]`) to also run the `signal:` directive during `brew upgrade` and `brew reinstall`
 * [`login_item:`](#uninstall-login_item) (string or array) - names of login items to remove
 * [`kext:`](#uninstall-kext) (string or array) - bundle IDs of kexts to unload from the system
 * [`script:`](#uninstall-script) (string or hash) - relative path to an uninstall script to be run via *sudo*; use hash if args are needed
@@ -872,14 +925,7 @@ IDs for all installed `launchd` jobs can be listed using [`list_installed_launch
 
 #### `uninstall` *quit*
 
-Some applications need to be quit (or explicitly signaled) in order to be safely upgraded in-place. By default, Homebrew does not run `:quit` or `:signal` directives when an uninstall is being performed as part of a `brew upgrade` or `brew reinstall` operation. This avoids unexpectedly terminating user processes during automated upgrades and is designed to avoid data loss; `uninstall quit:` is equivalent to a normal macOS quit and can still discard unsaved in-memory state such as web forms or editor buffers.
-
-When the application genuinely needs to be closed to upgrade or reinstall correctly and you have verified that it handles a normal macOS quit without losing important user data, you may opt a cask into running this directive during an upgrade or reinstall by including `:quit` in the `on_upgrade:` key:
-
-```ruby
-uninstall quit:       "com.example.app",
-          on_upgrade: :quit
-```
+`quit:` sends the standard macOS quit Apple Event to the application (equivalent to Cmd+Q), which allows the app to present save dialogs before closing. It runs during both `brew uninstall` and `brew upgrade`/`brew reinstall`.
 
 Bundle IDs for currently running applications can be listed using [`list_running_app_ids`](https://github.com/Homebrew/homebrew-cask/blob/HEAD/developer/bin/list_running_app_ids):
 
@@ -921,19 +967,19 @@ Note that when multiple running processes match the given bundle ID, all matchin
 
 Unlike `quit:` directives, Unix signals originate from the current user, not from the superuser. This is construed as a safety feature, since the superuser is capable of bringing down the system via signals. However, this inconsistency could also be considered a bug, and may be addressed in some fashion in a future version.
 
-Like `quit:` directives, `signal:` directives are skipped on upgrade and reinstall. You may opt a cask into running this directive during an upgrade or reinstall by including `:signal` in the `on_upgrade:` key:
+`signal:` directives are skipped during `brew upgrade` and `brew reinstall`. To opt a cask into running this directive during an upgrade or reinstall, add `on_upgrade: :signal`:
 
 ```ruby
 uninstall signal:     [["TERM", "com.example.daemon"]],
           on_upgrade: :signal
 ```
 
-You can opt-in to both quit and signal together:
+To run both `quit:` and `signal:` during an upgrade or reinstall:
 
 ```ruby
 uninstall quit:       "com.example.app",
           signal:     [["TERM", "com.example.app"]],
-          on_upgrade: [:quit, :signal]
+          on_upgrade: :signal
 ```
 
 #### `uninstall` *login_item*

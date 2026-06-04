@@ -52,6 +52,93 @@ module Homebrew::EnvConfig
     sig { returns(T.nilable(::String)) }
     def browser; end
 
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_brew?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_cargo?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_cask?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_flatpak?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_go?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_krew?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_mas?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_npm?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_tap?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_uv?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_vscode?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_cleanup_no_winget?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_brew?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_cargo?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_cask?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_flatpak?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_go?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_krew?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_mas?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_npm?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_tap?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_uv?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_vscode?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_dump_no_winget?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_force_install_cleanup?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_install_cleanup?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_no_describe?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_no_jobs?; end
+
+    sig { returns(T::Boolean) }
+    def bundle_secrets?; end
+
     sig { returns(T.nilable(::String)) }
     def bundle_user_cache; end
 
@@ -111,9 +198,6 @@ module Homebrew::EnvConfig
 
     sig { returns(T::Boolean) }
     def env_sync_strict?; end
-
-    sig { returns(T::Boolean) }
-    def eval_all?; end
 
     sig { returns(Integer) }
     def fail_log_lines; end
@@ -224,6 +308,9 @@ module Homebrew::EnvConfig
     def no_analytics?; end
 
     sig { returns(T::Boolean) }
+    def no_ask?; end
+
+    sig { returns(T::Boolean) }
     def no_auto_update?; end
 
     sig { returns(T::Boolean) }
@@ -243,6 +330,9 @@ module Homebrew::EnvConfig
 
     sig { returns(T::Boolean) }
     def no_env_hints?; end
+
+    sig { returns(T::Boolean) }
+    def no_eval_env_scrubbing?; end
 
     sig { returns(T::Boolean) }
     def no_force_brew_wrapper?; end
@@ -272,10 +362,22 @@ module Homebrew::EnvConfig
     def no_proxy; end
 
     sig { returns(T::Boolean) }
+    def no_require_tap_trust?; end
+
+    sig { returns(T::Boolean) }
+    def no_sandbox_cask?; end
+
+    sig { returns(T::Boolean) }
+    def no_sandbox_linux?; end
+
+    sig { returns(T::Boolean) }
     def no_update_report_new?; end
 
     sig { returns(T::Boolean) }
     def no_upgrade_auto_updates_casks?; end
+
+    sig { returns(T::Boolean) }
+    def no_upgrade_quit_casks?; end
 
     sig { returns(T::Boolean) }
     def no_verify_attestations?; end
@@ -285,6 +387,12 @@ module Homebrew::EnvConfig
 
     sig { returns(T::Boolean) }
     def pry?; end
+
+    sig { returns(T::Boolean) }
+    def require_tap_trust?; end
+
+    sig { returns(T::Boolean) }
+    def sandbox_linux?; end
 
     sig { returns(T::Boolean) }
     def sbom?; end
@@ -323,10 +431,16 @@ module Homebrew::EnvConfig
     def update_to_tag?; end
 
     sig { returns(T::Boolean) }
+    def upgrade_auto_updates_casks?; end
+
+    sig { returns(T::Boolean) }
     def upgrade_greedy?; end
 
     sig { returns(T.nilable(::String)) }
     def upgrade_greedy_casks; end
+
+    sig { returns(T::Boolean) }
+    def use_internal_api?; end
 
     sig { returns(T::Boolean) }
     def verbose?; end

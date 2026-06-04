@@ -34,10 +34,12 @@ module Homebrew
                description: "Only list formulae and casks that are currently installed."
         switch "--missing",
                description: "Only list formulae and casks that are not currently installed."
+        # odeprecated: remove in a future release.
         switch "--eval-all",
                description: "Evaluate all available formulae and casks, whether installed or not, to show " \
                             "their dependents.",
-               env:         :eval_all
+               env:         :eval_all,
+               hidden:      true
         switch "--include-implicit",
                description: "Include formulae that have <formula> as an implicit dependency for " \
                             "downloading and unpacking source files."
@@ -121,9 +123,12 @@ module Homebrew
           deps
         else
           eval_all = args.eval_all?
+          eval_all ||= Homebrew::EnvConfig.tap_trust_configured?
 
           if !args.installed? && !eval_all
-            raise UsageError, "`brew uses` needs `--installed` or `--eval-all` passed or `HOMEBREW_EVAL_ALL=1` set!"
+            raise UsageError,
+                  "`brew uses` needs `--installed`, `HOMEBREW_REQUIRE_TAP_TRUST=1` or " \
+                  "`HOMEBREW_NO_REQUIRE_TAP_TRUST=1` set!"
           end
 
           if show_formulae_and_casks || args.formula?

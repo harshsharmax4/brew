@@ -6,6 +6,7 @@ require "tsort"
 require "utils"
 require "utils/output"
 require "bundle/package_type"
+require "trust"
 
 module Homebrew
   module Bundle
@@ -73,6 +74,40 @@ module Homebrew
           !formula_upgradable?(formula)
         end
 
+        sig { params(formula: String, options: Homebrew::Bundle::EntryOptions).returns(T.nilable(T::Boolean)) }
+        def link_status_to_check(formula, options)
+          unless options.key?(:link)
+            return case formula_dump_link_status(formula)
+            when true
+              false
+            when false
+              true
+            end
+          end
+
+          expected_link_status?(options[:link], keg_only: Formula[formula].keg_only?)
+        end
+
+        sig { params(link: Homebrew::Bundle::EntryOption, keg_only: T::Boolean).returns(T::Boolean) }
+        def expected_link_status?(link, keg_only:)
+          case link
+          when :overwrite, true
+            true
+          when false
+            false
+          else
+            !keg_only
+          end
+        end
+
+        sig { params(formula: String).returns(T.nilable(T::Boolean)) }
+        def formula_dump_link_status(formula)
+          (
+            @formulae_by_full_name&.[](formula) ||
+            @formulae_by_name&.[](Utils.name_from_full_name(formula))
+          )&.fetch(:link?)
+        end
+
         sig { params(no_upgrade: T::Boolean, formula_name: String).returns(T::Boolean) }
         def no_upgrade_with_args?(no_upgrade, formula_name)
           no_upgrade && Bundle.upgrade_formulae.exclude?(formula_name)
@@ -138,28 +173,12 @@ module Homebrew
         end
 
         # Returns recursive dependency names for lock conflict detection.
-        # When pouring bottles, only runtime deps acquire keg locks so build
-        # deps like cmake don't serialize unrelated bottle pours.  When
-        # building from source all deps (including build) must be considered.
-        sig { params(name: String, include_build: T::Boolean).returns(T::Set[String]) }
-        def recursive_dep_names(name, include_build: true)
+        sig { params(name: String).returns(T::Set[String]) }
+        def recursive_dep_names(name)
           require "formula"
-          f = Formula[name]
-          if include_build
-            f.recursive_dependencies
-          else
-            f.runtime_dependencies
-          end.to_set(&:name)
+          Formula[name].recursive_dependencies.to_set(&:name)
         rescue FormulaUnavailableError
           Set.new
-        end
-
-        sig { params(name: String).returns(T::Boolean) }
-        def formula_bottled?(name)
-          formula = find_formula(name)
-          return false if formula.blank?
-
-          formula.fetch(:bottled, false)
         end
 
         sig { returns(T::Array[T::Hash[Symbol, T.untyped]]) }
@@ -213,6 +232,7 @@ module Homebrew
           requested_formula = formulae.select do |f|
             f[:installed_on_request?]
           end
+          trusted_formulae = Homebrew::Trust.trusted_entries(:formula)
           requested_formula.map do |f|
             brewline = if describe && f[:desc].present?
               f[:desc].split("\n").map { |s| "# #{s}\n" }.join
@@ -225,6 +245,7 @@ module Homebrew
             brewline += ", args: [#{args}]" unless f[:args].empty?
             brewline += ", restart_service: :changed" if !no_restart && Services.started?(f[:full_name])
             brewline += ", link: #{f[:link?]}" unless f[:link?].nil?
+            brewline += ", trusted: true" if trusted_formulae.include?(f[:full_name])
             brewline
           end.join("\n")
         end
@@ -422,9 +443,45 @@ module Homebrew
 
       sig { override.params(formula: Object, no_upgrade: T::Boolean).returns(T::Boolean) }
       def installed_and_up_to_date?(formula, no_upgrade: false)
-        raise "formula must be a String, got #{formula.class}: #{formula}" unless formula.is_a?(String)
+        name = formula_name(formula)
+        return false unless self.class.formula_installed_and_up_to_date?(name, no_upgrade:)
 
-        self.class.formula_installed_and_up_to_date?(formula, no_upgrade:)
+        options = formula_options(formula)
+        link_status = self.class.link_status_to_check(name, options)
+        return true if link_status.nil?
+
+        Formula[name].linked? == link_status
+      end
+
+      sig { override.params(name: Object, no_upgrade: T::Boolean).returns(String) }
+      def failure_reason(name, no_upgrade:)
+        formula = formula_name(name)
+        options = formula_options(name)
+        return super(formula, no_upgrade:) unless self.class.formula_installed_and_up_to_date?(formula, no_upgrade:)
+
+        link_status = self.class.link_status_to_check(formula, options)
+        return super(formula, no_upgrade:) if link_status.nil?
+
+        link_status = link_status ? "linked" : "unlinked"
+        "Formula #{formula} needs to be #{link_status}."
+      end
+
+      sig {
+        override.params(
+          entries:             T::Array[Object],
+          exit_on_first_error: T::Boolean,
+          no_upgrade:          T::Boolean,
+          verbose:             T::Boolean,
+        ).returns(T::Array[Object])
+      }
+      def find_actionable(entries, exit_on_first_error: false, no_upgrade: false, verbose: false)
+        requested = instance_of?(Homebrew::Bundle::Brew) ? checkable_entries(entries) : format_checkable(entries)
+
+        if exit_on_first_error
+          exit_early_check(requested, no_upgrade:)
+        else
+          full_check(requested, no_upgrade:)
+        end
       end
 
       sig { params(no_upgrade: T::Boolean, verbose: T::Boolean).returns(T::Boolean) }
@@ -540,22 +597,13 @@ module Homebrew
       sig { params(verbose: T::Boolean).returns(T::Boolean) }
       def link_change_state!(verbose: false)
         link_args = []
-        link_args << "--force" if unlinked_and_keg_only?
-
-        cmd = case @link
-        when :overwrite
-          link_args << "--overwrite"
+        link_status = self.class.expected_link_status?(@link, keg_only: keg_only?)
+        cmd = if link_status
+          link_args << "--force" if unlinked_and_keg_only?
+          link_args << "--overwrite" if @link == :overwrite
           "link" unless linked?
-        when true
-          "link" unless linked?
-        when false
-          "unlink" if linked?
-        when nil
-          if keg_only?
-            "unlink" if linked?
-          else
-            "link" unless linked?
-          end
+        elsif linked?
+          "unlink"
         end
 
         if cmd.present?
@@ -578,6 +626,21 @@ module Homebrew
       end
 
       private
+
+      sig { params(formula: Object).returns(String) }
+      def formula_name(formula)
+        return formula.name if formula.is_a?(Dsl::Entry)
+        return formula if formula.is_a?(String)
+
+        raise "formula must be a String or Dsl::Entry, got #{formula.class}: #{formula}"
+      end
+
+      sig { params(formula: Object).returns(Homebrew::Bundle::EntryOptions) }
+      def formula_options(formula)
+        return formula.options if formula.is_a?(Dsl::Entry)
+
+        {}
+      end
 
       sig { returns(T::Boolean) }
       def installed?

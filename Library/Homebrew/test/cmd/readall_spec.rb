@@ -64,4 +64,33 @@ RSpec.describe Homebrew::Cmd::ReadallCmd do
 
     expect(success).to be false
   end
+
+  it "explains nil sha256 values when loading tap casks on Linux" do
+    tap_path = mktmpdir
+    linux_cask_file = tap_path/"Casks/linux-example.rb"
+    linux_cask_file.dirname.mkpath
+    linux_cask_file.write <<~RUBY
+      cask "linux-example" do
+        version "1.0"
+        sha256 arm: "0000000000000000000000000000000000000000000000000000000000000000"
+        url "https://example.invalid/x.tar.gz"
+        name "Example"
+        desc "Linux-supported cask"
+        homepage "https://example.invalid/"
+        binary "x"
+      end
+    RUBY
+
+    success = nil
+    expect do
+      success = Homebrew::SimulateSystem.with(os: :linux) do
+        Readall.valid_tap?(
+          instance_double(Tap, formula_files: [], cask_files: [linux_cask_file]),
+          os_arch_combinations: [[:linux, :arm]],
+        )
+      end
+    end.to output(/Missing Linux stanzas.*`depends_on :macos`/m).to_stderr
+
+    expect(success).to be false
+  end
 end

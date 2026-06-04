@@ -4,7 +4,7 @@
 require "requirements"
 
 RSpec.describe Requirements do
-  subject(:requirements) { described_class.new }
+  subject(:requirements) { Requirements.new }
 
   describe "#<<" do
     it "returns itself" do

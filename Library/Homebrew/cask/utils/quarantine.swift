@@ -10,8 +10,8 @@ struct SwiftErr: TextOutputStream {
     }
 }
 
-// TODO: tell which arguments have to be provided
 guard CommandLine.arguments.count >= 4 else {
+    print("Usage: swift quarantine.swift <download-path> <download-url> <homepage-url>")
     exit(2)
 }
 

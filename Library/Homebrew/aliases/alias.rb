@@ -31,7 +31,7 @@ module Homebrew
 
       sig { returns(T::Boolean) }
       def reserved?
-        RESERVED.include? name
+        Aliases.reserved.include? name
       end
 
       sig { returns(T::Boolean) }

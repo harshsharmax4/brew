@@ -4,9 +4,11 @@
 require "system_command"
 
 RSpec.describe SystemCommand do
+  let(:klass) { SystemCommand }
+
   describe "#initialize" do
     subject(:command) do
-      described_class.new(
+      klass.new(
         "env",
         args:         env_args,
         env:,
@@ -95,7 +97,7 @@ RSpec.describe SystemCommand do
 
   context "when the exit code is 0" do
     describe "its result" do
-      subject(:result) { described_class.run("true") }
+      subject(:result) { klass.run("true") }
 
       it { is_expected.to be_a_success }
       it(:exit_status) { expect(result.exit_status).to eq(0) }
@@ -108,14 +110,14 @@ RSpec.describe SystemCommand do
     context "with a command that must succeed" do
       it "throws an error" do
         expect do
-          described_class.run!(command)
+          klass.run!(command)
         end.to raise_error(ErrorDuringExecution)
       end
     end
 
     context "with a command that does not have to succeed" do
       describe "its result" do
-        subject(:result) { described_class.run(command) }
+        subject(:result) { klass.run(command) }
 
         it { is_expected.not_to be_a_success }
         it(:exit_status) { expect(result.exit_status).to eq(1) }
@@ -132,7 +134,7 @@ RSpec.describe SystemCommand do
     end
 
     describe "its result" do
-      subject(:result) { described_class.run(command, args: [path]) }
+      subject(:result) { klass.run(command, args: [path]) }
 
       it { is_expected.to be_a_success }
       it(:stdout) { expect(result.stdout).to eq("somefile\n") }
@@ -150,7 +152,7 @@ RSpec.describe SystemCommand do
 
     shared_examples "it returns '1 2 3 4 5 6'" do
       describe "its result" do
-        subject(:result) { described_class.run(command, **options) }
+        subject(:result) { klass.run(command, **options) }
 
         it { is_expected.to be_a_success }
         it(:stdout) { expect(result.stdout).to eq([1, 3, 5, nil].join("\n")) }
@@ -162,7 +164,7 @@ RSpec.describe SystemCommand do
       it "echoes only STDERR" do
         expected = [2, 4, 6].map { |i| "#{i}\n" }.join
         expect do
-          described_class.run(command, **options)
+          klass.run(command, **options)
         end.to output(expected).to_stderr
       end
 
@@ -175,7 +177,7 @@ RSpec.describe SystemCommand do
       end
 
       it "echoes both STDOUT and STDERR" do
-        expect { described_class.run(command, **options) }
+        expect { klass.run(command, **options) }
           .to output("1\n3\n5\n").to_stdout
           .and output("2\n4\n6\n").to_stderr
       end
@@ -189,7 +191,7 @@ RSpec.describe SystemCommand do
       end
 
       it "echoes only STDERR output" do
-        expect { described_class.run(command, **options) }
+        expect { klass.run(command, **options) }
           .to output("2\n4\n6\n").to_stderr
           .and not_to_output.to_stdout
       end
@@ -206,7 +208,7 @@ RSpec.describe SystemCommand do
 
         it "echoes the command and all output to STDERR" do
           with_context(verbose: true, debug: true) do
-            expect { described_class.run(command, **options) }
+            expect { klass.run(command, **options) }
               .to output(/\A.*#{Regexp.escape(command)}.*\n1\n2\n3\n4\n5\n6\n\Z/).to_stderr
               .and not_to_output.to_stdout
           end
@@ -223,7 +225,7 @@ RSpec.describe SystemCommand do
 
       it "echoes nothing" do
         expect do
-          described_class.run(command, **options)
+          klass.run(command, **options)
         end.not_to output.to_stdout
       end
 
@@ -238,7 +240,7 @@ RSpec.describe SystemCommand do
       it "echoes only STDOUT" do
         expected = [1, 3, 5].map { |i| "#{i}\n" }.join
         expect do
-          described_class.run(command, **options)
+          klass.run(command, **options)
         end.to output(expected).to_stdout
       end
 
@@ -256,13 +258,13 @@ RSpec.describe SystemCommand do
     end
 
     it "returns without deadlocking", timeout: 30 do
-      expect(described_class.run(command, **options)).to be_a_success
+      expect(klass.run(command, **options)).to be_a_success
     end
   end
 
   context "when given an invalid variable name" do
     it "raises an ArgumentError" do
-      expect { described_class.run("true", env: { "1ABC" => true }) }
+      expect { klass.run("true", env: { "1ABC" => true }) }
         .to raise_error(ArgumentError, /variable name/)
     end
   end
@@ -276,14 +278,14 @@ RSpec.describe SystemCommand do
 
       FileUtils.chmod "+x", path/"tool"
 
-      expect(described_class.run("tool", env: { "PATH" => path.to_s }).stdout).to include "Hello, world!"
+      expect(klass.run("tool", env: { "PATH" => path.to_s }).stdout).to include "Hello, world!"
     end
   end
 
   describe "#run" do
     it "does not raise a `SystemCallError` when the executable does not exist" do
       expect do
-        described_class.run("non_existent_executable")
+        klass.run("non_existent_executable")
       end.not_to raise_error
     end
 
@@ -321,11 +323,11 @@ RSpec.describe SystemCommand do
       it "does not leak the secrets" do
         redacted_msg = /#{Regexp.escape("username:******")}/
         expect do
-          described_class.run! "curl",
-                               args:    %w[--user username:hunter2],
-                               verbose: true,
-                               debug:   true,
-                               secrets: %w[hunter2]
+          klass.run! "curl",
+                     args:    %w[--user username:hunter2],
+                     verbose: true,
+                     debug:   true,
+                     secrets: %w[hunter2]
         end.to raise_error(ErrorDuringExecution, redacted_msg).and output(redacted_msg).to_stderr
       end
 
@@ -333,10 +335,10 @@ RSpec.describe SystemCommand do
         redacted_msg = /#{Regexp.escape("username:******")}/
         expect do
           ENV["PASSWORD"] = "hunter2"
-          described_class.run! "curl",
-                               args:    %w[--user username:hunter2],
-                               debug:   true,
-                               verbose: true
+          klass.run! "curl",
+                     args:    %w[--user username:hunter2],
+                     debug:   true,
+                     verbose: true
         end.to raise_error(ErrorDuringExecution, redacted_msg).and output(redacted_msg).to_stderr
       end
     end
@@ -345,11 +347,11 @@ RSpec.describe SystemCommand do
       it "does not leak the secrets" do
         redacted_msg = /#{Regexp.escape("username:******")}/
         expect do
-          described_class.run! "echo",
-                               args:         %w[username:hunter2],
-                               verbose:      true,
-                               print_stdout: true,
-                               secrets:      %w[hunter2]
+          klass.run! "echo",
+                     args:         %w[username:hunter2],
+                     verbose:      true,
+                     print_stdout: true,
+                     secrets:      %w[hunter2]
         end.to output(redacted_msg).to_stdout
       end
 
@@ -357,10 +359,10 @@ RSpec.describe SystemCommand do
         redacted_msg = /#{Regexp.escape("username:******")}/
         expect do
           ENV["PASSWORD"] = "hunter2"
-          described_class.run! "echo",
-                               args:         %w[username:hunter2],
-                               print_stdout: true,
-                               verbose:      true
+          klass.run! "echo",
+                     args:         %w[username:hunter2],
+                     print_stdout: true,
+                     verbose:      true
         end.to output(redacted_msg).to_stdout
       end
     end
@@ -374,7 +376,7 @@ RSpec.describe SystemCommand do
             # Ignore SIGINT.
           end
 
-          described_class.run! "sleep", args: [5]
+          klass.run! "sleep", args: [5]
 
           exit!
         end

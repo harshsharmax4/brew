@@ -322,7 +322,7 @@ module GitHub
         args += ["--dump-header", T.must(headers_tmpfile.path)]
 
         require "utils/curl"
-        result = Utils::Curl.curl_output("--location", url.to_s, *args, secrets: [token])
+        result = Utils::Curl.curl_output("--location", url.to_s, *args, secrets: token ? [token] : [])
         output, _, http_code = result.stdout.rpartition("\n")
         output, _, http_code = output.rpartition("\n") if http_code == "000"
         headers = headers_tmpfile.read
@@ -360,8 +360,8 @@ module GitHub
         per_page:                Integer,
         scopes:                  T::Array[String],
         _block:                  T.proc
-                                 .params(result: T.untyped, page: Integer)
-                                 .returns(T.untyped),
+                                  .params(result: T.untyped, page: Integer)
+                                  .returns(T.untyped),
       ).void
     }
     def self.paginate_rest(url, additional_query_params: T.unsafe(nil), per_page: 100, scopes: [].freeze, &_block)

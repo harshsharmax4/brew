@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "cmd/shared_examples/args_parse"
@@ -6,15 +6,15 @@ require "bump_version_parser"
 require "dev-cmd/bump"
 
 RSpec.describe Homebrew::DevCmd::Bump do
-  subject(:bump) { described_class.new(["test"]) }
+  subject(:bump) { klass.new(["test"]) }
 
+  let(:klass) { Homebrew::DevCmd::Bump }
   let(:f_basic) do
     formula("basic_formula") do
       desc "Basic formula"
       url "https://brew.sh/test-1.2.3.tgz"
     end
   end
-
   let(:c_basic) do
     Cask::CaskLoader.load(+<<-RUBY)
       cask "basic_cask" do
@@ -25,7 +25,6 @@ RSpec.describe Homebrew::DevCmd::Bump do
       end
     RUBY
   end
-
   let(:c_latest) do
     Cask::CaskLoader.load(+<<-RUBY)
       cask "latest_cask" do
@@ -58,11 +57,11 @@ RSpec.describe Homebrew::DevCmd::Bump do
     end
   end
 
-  it "gives an error for `--tap` with official taps", :integration_test do
-    expect { brew "bump", "--tap", "Homebrew/core" }
-      .to output(/Invalid usage/).to_stderr
-      .and not_to_output.to_stdout
-      .and be_a_failure
+  it "gives an error for `--tap` with official taps" do
+    allow(Homebrew).to receive(:install_bundler_gems!)
+
+    expect { klass.new(["--tap", "Homebrew/core"]).run }
+      .to raise_error(UsageError, /`--tap` requires `--auto` for official taps/)
   end
 
   describe "::skip_ineligible_formulae!" do
@@ -182,6 +181,116 @@ RSpec.describe Homebrew::DevCmd::Bump do
         expect(bump.send(:message?, Cask::DSL::Version.new(message_string))).to be(true)
         expect(bump.send(:message?, message_string)).to be(true)
       end
+    end
+  end
+
+  describe "::version_with_cooldown" do
+    it "uses RubyGems version creation times" do
+      version_info = {
+        latest: "1.2.4",
+        meta:   {
+          strategy: "RubyGems",
+          url:      {
+            original: "https://rubygems.org/downloads/example-package-1.2.3.gem",
+            strategy: "https://rubygems.org/api/v1/versions/example-package/latest.json",
+          },
+        },
+      }
+      content = <<~JSON
+        [
+          {
+            "created_at": "2026-04-04T00:00:00.000Z",
+            "number": "1.2.4",
+            "platform": "ruby",
+            "prerelease": false
+          },
+          {
+            "created_at": "2026-04-02T00:00:00.000Z",
+            "number": "1.2.3",
+            "platform": "ruby",
+            "prerelease": false
+          }
+        ]
+      JSON
+
+      allow(DateTime).to receive(:now).and_return(DateTime.parse("2026-04-04T12:00:00Z"))
+      allow(Utils::Curl).to receive(:curl_output)
+        .with(
+          "--compressed",
+          "--fail-with-body",
+          "--location",
+          "--max-redirs",
+          "5",
+          "--silent",
+          "https://rubygems.org/api/v1/versions/example-package.json",
+          connect_timeout: 15,
+          max_time:        55,
+          retries:         0,
+          timeout:         60,
+        )
+        .and_return([content, "", instance_double(Process::Status, success?: true)])
+
+      expect(bump.send(:version_with_cooldown, version_info, Version.new("1.2.2"))).to eq(Version.new("1.2.3"))
+    end
+
+    it "uses platform-specific RubyGems releases for native gems" do
+      version_info = {
+        latest: "1.2.4",
+        meta:   {
+          strategy: "RubyGems",
+          url:      {
+            original: "https://rubygems.org/downloads/example-package-1.2.3-arm64-darwin.gem",
+            strategy: "https://rubygems.org/api/v1/versions/example-package/latest.json",
+          },
+        },
+      }
+      content = <<~JSON
+        [
+          {
+            "created_at": "2026-04-04T00:00:00.000Z",
+            "number": "1.2.4",
+            "platform": "arm64-darwin",
+            "prerelease": false
+          },
+          {
+            "created_at": "2026-04-02T00:00:00.000Z",
+            "number": "1.2.3",
+            "platform": "arm64-darwin",
+            "prerelease": false
+          },
+          {
+            "created_at": "2026-03-01T00:00:00.000Z",
+            "number": "1.2.4",
+            "platform": "ruby",
+            "prerelease": false
+          },
+          {
+            "created_at": "2026-02-01T00:00:00.000Z",
+            "number": "1.2.3",
+            "platform": "ruby",
+            "prerelease": false
+          }
+        ]
+      JSON
+
+      allow(DateTime).to receive(:now).and_return(DateTime.parse("2026-04-04T12:00:00Z"))
+      allow(Utils::Curl).to receive(:curl_output)
+        .with(
+          "--compressed",
+          "--fail-with-body",
+          "--location",
+          "--max-redirs",
+          "5",
+          "--silent",
+          "https://rubygems.org/api/v1/versions/example-package.json",
+          connect_timeout: 15,
+          max_time:        55,
+          retries:         0,
+          timeout:         60,
+        )
+        .and_return([content, "", instance_double(Process::Status, success?: true)])
+
+      expect(bump.send(:version_with_cooldown, version_info, Version.new("1.2.2"))).to eq(Version.new("1.2.3"))
     end
   end
 end

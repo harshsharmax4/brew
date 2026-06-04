@@ -136,7 +136,13 @@ class RuboCop::Cask::AST::Stanza
   def postflight?; end
 
   sig { returns(T::Boolean) }
+  def postflight_steps?; end
+
+  sig { returns(T::Boolean) }
   def preflight?; end
+
+  sig { returns(T::Boolean) }
+  def preflight_steps?; end
 
   sig { returns(T::Boolean) }
   def prefpane?; end
@@ -175,7 +181,13 @@ class RuboCop::Cask::AST::Stanza
   def uninstall_postflight?; end
 
   sig { returns(T::Boolean) }
+  def uninstall_postflight_steps?; end
+
+  sig { returns(T::Boolean) }
   def uninstall_preflight?; end
+
+  sig { returns(T::Boolean) }
+  def uninstall_preflight_steps?; end
 
   sig { returns(T::Boolean) }
   def url?; end

@@ -22,7 +22,7 @@ module RuboCop
         )
 
         USELESS_METADATA_MSG =
-          "`on_upgrade` has no effect without matching `uninstall quit:` or `uninstall signal:` directives"
+          "`on_upgrade` has no effect without matching `uninstall signal:` directive"
 
         PARTIAL_METADATA_MSG = "`on_upgrade` lists %<symbols>s without matching `uninstall` directives"
 
@@ -94,7 +94,6 @@ module RuboCop
           return report_fully_invalid_metadata(on_upgrade_pair) if requested.empty?
 
           available = []
-          available << :quit   if hash_node.pairs.any? { |p| p.key.value == :quit }
           available << :signal if hash_node.pairs.any? { |p| p.key.value == :signal }
 
           valid_syms   = requested & available
@@ -111,7 +110,7 @@ module RuboCop
         sig { params(on_upgrade_pair: AST::PairNode).void }
         def report_fully_invalid_metadata(on_upgrade_pair)
           add_offense(on_upgrade_pair.value,
-                      message: "`on_upgrade` value must be :quit, :signal, or an array of those symbols")
+                      message: "`on_upgrade` value must be :signal or an array [:signal]")
         end
 
         sig {

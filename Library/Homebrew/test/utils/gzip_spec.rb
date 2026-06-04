@@ -1,9 +1,11 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "utils/gzip"
 
 RSpec.describe Utils::Gzip do
+  let(:klass) { Utils::Gzip }
+
   include FileUtils
 
   describe "compress_with_options" do
@@ -19,7 +21,7 @@ RSpec.describe Utils::Gzip do
         File.write(somefile, file_content)
         mkdir path/"subdir"
 
-        expect(described_class.compress_with_options(somefile, mtime:, orig_name:,
+        expect(klass.compress_with_options(somefile, mtime:, orig_name:,
 output:)).to eq(output)
         expect(Digest::SHA256.hexdigest(File.read(output))).to eq(expected_checksum)
       end
@@ -34,7 +36,7 @@ output:)).to eq(output)
         somefile = path/"somefile"
         File.write(somefile, file_content)
 
-        expect(described_class.compress_with_options(somefile).to_s).to eq("#{somefile}.gz")
+        expect(klass.compress_with_options(somefile).to_s).to eq("#{somefile}.gz")
         expect(Digest::SHA256.hexdigest(File.read("#{somefile}.gz"))).to eq(expected_checksum)
       end
     end
@@ -46,7 +48,7 @@ output:)).to eq(output)
         files = (0..2).map { |n| path/"somefile#{n}" }
         FileUtils.touch files
 
-        results = described_class.compress(*files, reproducible: false)
+        results = klass.compress(*files, reproducible: false)
         3.times do |n|
           expect(results[n].to_s).to eq("#{files[n]}.gz")
           expect(Pathname.new("#{files[n]}.gz")).to exist
@@ -66,7 +68,7 @@ output:)).to eq(output)
         files = (0..2).map { |n| path/"somefile#{n}" }
         files.each { |f| File.write(f, "Hello world") }
 
-        results = described_class.compress(*files, mtime:)
+        results = klass.compress(*files, mtime:)
         3.times do |n|
           expect(results[n].to_s).to eq("#{files[n]}.gz")
           expect(Digest::SHA256.hexdigest(File.read(results[n]))).to eq(expected_checksums[n])
@@ -86,7 +88,7 @@ output:)).to eq(output)
         files = (0..2).map { |n| path/"somefile#{n}" }
         files.each { |f| File.write(f, "Hello world") }
 
-        results = described_class.compress(*files)
+        results = klass.compress(*files)
         3.times do |n|
           expect(results[n].to_s).to eq("#{files[n]}.gz")
           expect(Digest::SHA256.hexdigest(File.read(results[n]))).to eq(expected_checksums[n])

@@ -5,9 +5,11 @@ require "bundle"
 require "bundle/brew_services"
 
 RSpec.describe Homebrew::Bundle::Brew::Services do
+  let(:klass) { Homebrew::Bundle::Brew::Services }
+
   describe ".started_services" do
     before do
-      described_class.reset!
+      klass.reset!
     end
 
     it "returns started services" do
@@ -27,25 +29,25 @@ RSpec.describe Homebrew::Bundle::Brew::Services do
           }
         ]
       EOS
-      expect(described_class.started_services).to contain_exactly("nginx", "mysql")
+      expect(klass.started_services).to contain_exactly("nginx", "mysql")
     end
 
     it "returns empty array when no services exist" do
       allow(Utils).to receive(:safe_popen_read).and_return("[]\n")
-      expect(described_class.started_services).to eq([])
+      expect(klass.started_services).to eq([])
     end
 
     it "returns the missing daemon manager fallback when no daemon manager is available" do
       allow(Homebrew::Services::System).to receive_messages(launchctl?: false, systemctl?: false)
-      allow(described_class).to receive(:started_services_without_daemon_manager).and_return([])
+      allow(klass).to receive(:started_services_without_daemon_manager).and_return([])
 
-      expect(described_class.started_services).to eq([])
+      expect(klass.started_services).to eq([])
     end
 
     it "exits with error on macOS when no daemon manager is available", :needs_macos do
       allow(Homebrew::Services::System).to receive_messages(launchctl?: false, systemctl?: false)
       expect do
-        described_class.started_services
+        klass.started_services
       end.to raise_error(SystemExit)
         .and output(/supported only on macOS or Linux/).to_stderr
     end
@@ -54,7 +56,7 @@ RSpec.describe Homebrew::Bundle::Brew::Services do
   describe ".started_services_without_daemon_manager" do
     it "warns and returns an empty array on Linux", :needs_linux do
       expect do
-        expect(described_class.started_services_without_daemon_manager).to eq([])
+        expect(klass.started_services_without_daemon_manager).to eq([])
       end.to output(/Skipping `brew services list` due to missing systemctl/).to_stderr
     end
   end
@@ -62,53 +64,53 @@ RSpec.describe Homebrew::Bundle::Brew::Services do
   context "when brew-services is installed" do
     context "when the service is stopped" do
       it "when the service is started" do
-        allow(described_class).to receive(:started_services).and_return(%w[nginx])
+        allow(klass).to receive(:started_services).and_return(%w[nginx])
         expect(Homebrew::Bundle).to receive(:system).with(HOMEBREW_BREW_FILE, "services", "stop", "nginx",
                                                           verbose: false).and_return(true)
-        expect(described_class.stop("nginx")).to be(true)
-        expect(described_class.started_services).not_to include("nginx")
+        expect(klass.stop("nginx")).to be(true)
+        expect(klass.started_services).not_to include("nginx")
       end
 
       it "when the service is already stopped" do
-        allow(described_class).to receive(:started_services).and_return(%w[])
+        allow(klass).to receive(:started_services).and_return(%w[])
         expect(Homebrew::Bundle).not_to receive(:system).with(HOMEBREW_BREW_FILE, "services", "stop", "nginx",
                                                               verbose: false)
-        expect(described_class.stop("nginx")).to be(true)
-        expect(described_class.started_services).not_to include("nginx")
+        expect(klass.stop("nginx")).to be(true)
+        expect(klass.started_services).not_to include("nginx")
       end
     end
 
     it "starts the service" do
-      allow(described_class).to receive(:started_services).and_return([])
+      allow(klass).to receive(:started_services).and_return([])
       expect(Homebrew::Bundle).to receive(:system).with(HOMEBREW_BREW_FILE, "services", "start", "nginx",
                                                         verbose: false).and_return(true)
-      expect(described_class.start("nginx")).to be(true)
-      expect(described_class.started_services).to include("nginx")
+      expect(klass.start("nginx")).to be(true)
+      expect(klass.started_services).to include("nginx")
     end
 
     it "runs the service" do
-      allow(described_class).to receive(:started_services).and_return([])
+      allow(klass).to receive(:started_services).and_return([])
       expect(Homebrew::Bundle).to receive(:system).with(HOMEBREW_BREW_FILE, "services", "run", "nginx",
                                                         verbose: false).and_return(true)
-      expect(described_class.run("nginx")).to be(true)
-      expect(described_class.started_services).to include("nginx")
+      expect(klass.run("nginx")).to be(true)
+      expect(klass.started_services).to include("nginx")
     end
 
     it "restarts the service" do
-      allow(described_class).to receive(:started_services).and_return([])
+      allow(klass).to receive(:started_services).and_return([])
       expect(Homebrew::Bundle).to receive(:system).with(HOMEBREW_BREW_FILE, "services", "restart", "nginx",
                                                         verbose: false).and_return(true)
-      expect(described_class.restart("nginx")).to be(true)
-      expect(described_class.started_services).to include("nginx")
+      expect(klass.restart("nginx")).to be(true)
+      expect(klass.started_services).to include("nginx")
     end
   end
 
   describe "#installed_and_up_to_date?" do
-    subject(:services) { described_class.new }
+    subject(:services) { klass.new }
 
     before do
-      described_class.reset!
-      allow(described_class).to receive(:started_services).and_return(%w[mailhog])
+      klass.reset!
+      allow(klass).to receive(:started_services).and_return(%w[mailhog])
       allow(services).to receive(:formula_needs_to_start?).and_return(true)
       allow(Homebrew::Bundle::Brew).to receive(:formula_oldnames).and_return({})
     end
@@ -156,7 +158,7 @@ RSpec.describe Homebrew::Bundle::Brew::Services do
         allow(FileTest).to receive(:file?).and_call_original
         expect(FileTest).to receive(:file?).with(service_file.to_s).and_return(true)
 
-        expect(described_class.versioned_service_file(foo.name)).to eq(service_file)
+        expect(klass.versioned_service_file(foo.name)).to eq(service_file)
       end
     end
 

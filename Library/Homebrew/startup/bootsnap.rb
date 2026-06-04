@@ -40,7 +40,11 @@ module Homebrew
     def self.load!(compile_cache: true)
       return unless enabled?
 
-      require ENV.fetch("HOMEBREW_BOOTSNAP_GEM_PATH")
+      begin
+        require ENV.fetch("HOMEBREW_BOOTSNAP_GEM_PATH")
+      rescue LoadError
+        return
+      end
 
       ::Bootsnap.setup(
         cache_dir:,
@@ -50,7 +54,8 @@ module Homebrew
         # https://github.com/Shopify/bootsnap?tab=readme-ov-file#precompilation
         development_mode:   true,
         load_path_cache:    true,
-        compile_cache_iseq: compile_cache,
+        # Ruby refuses InstructionSequence#to_binary while Coverage is active.
+        compile_cache_iseq: compile_cache && ENV["HOMEBREW_TESTS_COVERAGE"].nil?,
         compile_cache_yaml: compile_cache,
       )
     end

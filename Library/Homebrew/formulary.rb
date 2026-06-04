@@ -10,9 +10,11 @@ require "utils/bottles"
 require "utils/output"
 require "utils/path"
 require "service"
+require "trust"
 require "utils/curl"
 require "extend/hash/deep_transform_values"
 require "extend/hash/keys"
+require "extend/ENV/sensitive"
 require "tap"
 
 # The {Formulary} is responsible for creating instances of {Formula}.
@@ -125,6 +127,8 @@ module Formulary
   def self.load_formula(name, path, contents, namespace, flags:, ignore_errors:)
     raise "Formula loading disabled by `$HOMEBREW_DISABLE_LOAD_FORMULA`!" if Homebrew::EnvConfig.disable_load_formula?
 
+    Homebrew::Trust.require_trusted_formula!(name, path)
+
     require "formula"
     require "ignorable"
     require "stringio"
@@ -151,10 +155,12 @@ module Formulary
         raise FormulaUnreadableError.new(name, e)
       end
     end
-    if ignore_errors
-      Ignorable.hook_raise(&eval_formula)
-    else
-      eval_formula.call
+    ENV.clear_sensitive_environment_for_eval! do
+      if ignore_errors
+        Ignorable.hook_raise(&eval_formula)
+      else
+        eval_formula.call
+      end
     end
 
     class_name = class_s(name)
@@ -172,13 +178,13 @@ module Formulary
   ensure
     # TODO: Make printing to stdout an error so that we can print a tap name.
     #       See discussion at https://github.com/Homebrew/brew/pull/20226#discussion_r2195886888
-    if (printed_to_stdout = $stdout.string.strip.presence)
+    if old_stdout && $stdout.respond_to?(:string) && (printed_to_stdout = $stdout.string.strip.presence)
       opoo <<~WARNING
         Formula #{name} attempted to print the following while being loaded:
         #{printed_to_stdout}
       WARNING
     end
-    $stdout = old_stdout
+    $stdout = old_stdout if old_stdout
   end
 
   sig { params(identifier: String).returns(String) }
@@ -248,6 +254,25 @@ module Formulary
             sha256 checksum
           end
 
+          formula_struct.stable_patches.each do |patch_hash|
+            patch patch_hash.fetch("strip", patch_hash[:strip]).to_sym do
+              T.bind(self, Resource::Patch)
+
+              if (patch_url = patch_hash.fetch("url", patch_hash[:url]))
+                url patch_url
+                if (patch_sha256 = patch_hash.fetch("sha256", patch_hash[:sha256]))
+                  sha256 patch_sha256
+                end
+                apply patch_hash.fetch("apply", patch_hash[:apply]) if patch_hash.fetch("apply", patch_hash[:apply])
+                if (patch_directory = patch_hash.fetch("directory", patch_hash[:directory]))
+                  directory patch_directory
+                end
+              elsif (patch_file = patch_hash.fetch("file", patch_hash[:file]))
+                file patch_file
+              end
+            end
+          end
+
           formula_struct.stable_dependencies.each do |dep|
             depends_on dep
           end
@@ -302,6 +327,12 @@ module Formulary
       formula_struct.link_overwrite_paths.each do |path|
         link_overwrite path
       end
+
+      @post_install_steps = T.let(
+        formula_struct.post_install_steps,
+        T.nilable(Homebrew::InstallSteps::Steps),
+      )
+      @post_install_steps_defined = T.let(formula_struct.post_install_steps.present?, T.nilable(T::Boolean))
 
       define_method(:install) do
         raise NotImplementedError, "Cannot build from source from abstract formula."
@@ -1187,7 +1218,12 @@ module Formulary
       end
     end
 
-    opoo "Formula #{old_name} was renamed to #{new_name}." if warn && old_name && new_name
+    if warn && old_name && new_name
+      destination_exists = find_formula_in_tap(name, tap).exist? ||
+                           (tap.core_tap? && !Homebrew::EnvConfig.no_install_from_api? &&
+                            Homebrew::API.formula_names.include?(name))
+      opoo "Formula #{old_name} was renamed to #{new_name}." if destination_exists
+    end
 
     [name, tap, type]
   end

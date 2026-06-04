@@ -4,8 +4,9 @@
 require "download_strategy"
 
 RSpec.describe GitDownloadStrategy do
-  subject(:strategy) { described_class.new(url, name, version) }
+  subject(:strategy) { klass.new(url, name, version) }
 
+  let(:klass) { GitDownloadStrategy }
   let(:name) { "baz" }
   let(:url) { "https://github.com/homebrew/foo" }
   let(:version) { nil }

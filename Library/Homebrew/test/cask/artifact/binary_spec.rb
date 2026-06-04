@@ -2,12 +2,14 @@
 # frozen_string_literal: true
 
 RSpec.describe Cask::Artifact::Binary, :cask do
+  let(:klass) { Cask::Artifact::Binary }
+
   let(:cask) do
     Cask::CaskLoader.load(cask_path("with-binary")).tap do |cask|
       InstallHelper.install_without_artifacts(cask)
     end
   end
-  let(:artifacts) { cask.artifacts.grep(described_class) }
+  let(:artifacts) { cask.artifacts.grep(klass) }
   let(:binarydir) { cask.config.binarydir }
   let(:expected_path) { binarydir.join("binary") }
 

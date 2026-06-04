@@ -4,8 +4,10 @@
 require "missing_formula"
 
 RSpec.describe Homebrew::MissingFormula do
+  let(:klass) { Homebrew::MissingFormula }
+
   describe "::reason" do
-    subject { described_class.reason("gem") }
+    subject { klass.reason("gem") }
 
     it { is_expected.not_to be_nil }
   end
@@ -18,24 +20,24 @@ RSpec.describe Homebrew::MissingFormula do
     end
 
     specify(:aggregate_failures) do
-      expect(described_class).to disallow("gem")
-      expect(described_class).to disallow("pip")
-      expect(described_class).to disallow("pil")
-      expect(described_class).to disallow("macruby")
-      expect(described_class).to disallow("lzma")
-      expect(described_class).to disallow("gsutil")
-      expect(described_class).to disallow("gfortran")
-      expect(described_class).to disallow("play")
-      expect(described_class).to disallow("haskell-platform")
-      expect(described_class).to disallow("mysqldump-secure")
-      expect(described_class).to disallow("ngrok")
+      expect(klass).to disallow("gem")
+      expect(klass).to disallow("pip")
+      expect(klass).to disallow("pil")
+      expect(klass).to disallow("macruby")
+      expect(klass).to disallow("lzma")
+      expect(klass).to disallow("gsutil")
+      expect(klass).to disallow("gfortran")
+      expect(klass).to disallow("play")
+      expect(klass).to disallow("haskell-platform")
+      expect(klass).to disallow("mysqldump-secure")
+      expect(klass).to disallow("ngrok")
     end
 
     it("disallows Xcode", :needs_macos) { is_expected.to disallow("xcode") }
   end
 
   describe "::tap_migration_reason" do
-    subject(:reason) { described_class.tap_migration_reason(formula) }
+    subject(:reason) { klass.tap_migration_reason(formula) }
 
     let(:migration_target) { "homebrew/bar" }
 
@@ -71,7 +73,7 @@ RSpec.describe Homebrew::MissingFormula do
   end
 
   describe "::deleted_reason" do
-    subject { described_class.deleted_reason(formula, silent: true) }
+    subject { klass.deleted_reason(formula, silent: true) }
 
     before do
       tap_path = HOMEBREW_TAP_DIRECTORY/"homebrew/homebrew-foo"
@@ -115,7 +117,7 @@ RSpec.describe Homebrew::MissingFormula do
   end
 
   describe "::cask_reason", :cask do
-    subject(:reason) { described_class.cask_reason(formula, show_info:) }
+    subject(:reason) { klass.cask_reason(formula, show_info:) }
 
     context "with a formula name that is a cask and show_info: false" do
       let(:formula) { "local-caffeine" }
@@ -143,7 +145,7 @@ RSpec.describe Homebrew::MissingFormula do
   end
 
   describe "::suggest_command", :cask do
-    subject(:reason) { described_class.suggest_command(name, command) }
+    subject(:reason) { klass.suggest_command(name, command) }
 
     context "when installing" do
       let(:name) { "local-caffeine" }

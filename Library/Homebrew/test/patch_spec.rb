@@ -4,9 +4,11 @@
 require "patch"
 
 RSpec.describe Patch do
+  let(:klass) { Patch }
+
   describe "#create" do
     context "with a simple patch" do
-      subject(:patch) { described_class.create(:p2, nil) }
+      subject(:patch) { klass.create(:p2, nil) }
 
       specify(:aggregate_failures) do
         expect(patch).to be_a ExternalPatch
@@ -17,35 +19,35 @@ RSpec.describe Patch do
     end
 
     context "with a string patch" do
-      subject(:patch) { described_class.create(:p0, "foo") }
+      subject(:patch) { klass.create(:p0, "foo") }
 
       it { is_expected.to be_a StringPatch }
       it(:strip) { expect(patch.strip).to eq(:p0) }
     end
 
     context "with a string patch without strip" do
-      subject(:patch) { described_class.create("foo", nil) }
+      subject(:patch) { klass.create("foo", nil) }
 
       it { is_expected.to be_a StringPatch }
       it(:strip) { expect(patch.strip).to eq(:p1) }
     end
 
     context "with a data patch" do
-      subject(:patch) { described_class.create(:p0, :DATA) }
+      subject(:patch) { klass.create(:p0, :DATA) }
 
       it { is_expected.to be_a DATAPatch }
       it(:strip) { expect(patch.strip).to eq(:p0) }
     end
 
     context "with a data patch without strip" do
-      subject(:patch) { described_class.create(:DATA, nil) }
+      subject(:patch) { klass.create(:DATA, nil) }
 
       it { is_expected.to be_a DATAPatch }
       it(:strip) { expect(patch.strip).to eq(:p1) }
     end
 
     context "with a local file patch" do
-      subject(:patch) { described_class.create(:p0, nil) { file "Patches/foo.diff" } }
+      subject(:patch) { klass.create(:p0, nil) { file "Patches/foo.diff" } }
 
       specify(:aggregate_failures) do
         expect(patch).to be_a LocalPatch
@@ -58,43 +60,43 @@ RSpec.describe Patch do
 
     it "rejects blank local file patch paths" do
       expect do
-        described_class.create(:p1, nil) { file "" }
+        klass.create(:p1, nil) { file "" }
       end.to raise_error(ArgumentError, "Patch file must be a relative path within the repository.")
     end
 
     it "rejects current directory local file patch paths" do
       expect do
-        described_class.create(:p1, nil) { file "." }
+        klass.create(:p1, nil) { file "." }
       end.to raise_error(ArgumentError, "Patch file must be a relative path within the repository.")
     end
 
     it "rejects parent directory local file patch paths" do
       expect do
-        described_class.create(:p1, nil) { file ".." }
+        klass.create(:p1, nil) { file ".." }
       end.to raise_error(ArgumentError, "Patch file must be a relative path within the repository.")
     end
 
     it "rejects local file patch paths ending in a slash" do
       expect do
-        described_class.create(:p1, nil) { file "Patches/" }
+        klass.create(:p1, nil) { file "Patches/" }
       end.to raise_error(ArgumentError, "Patch file must be a relative path within the repository.")
     end
 
     it "rejects local file patches outside the repository" do
       expect do
-        described_class.create(:p1, nil) { file "../foo.diff" }
+        klass.create(:p1, nil) { file "../foo.diff" }
       end.to raise_error(ArgumentError, "Patch file must be a relative path within the repository.")
     end
 
     it "rejects absolute local file patches" do
       expect do
-        described_class.create(:p1, nil) { file "/tmp/foo.diff" }
+        klass.create(:p1, nil) { file "/tmp/foo.diff" }
       end.to raise_error(ArgumentError, "Patch file must be a relative path within the repository.")
     end
 
     it "rejects local file patches with URLs" do
       expect do
-        described_class.create(:p1, nil) do
+        klass.create(:p1, nil) do
           file "Patches/foo.diff"
           url "https://brew.sh/foo.diff"
         end
@@ -103,7 +105,7 @@ RSpec.describe Patch do
 
     it "rejects local file patches with sha256" do
       expect do
-        described_class.create(:p1, nil) do
+        klass.create(:p1, nil) do
           file "Patches/foo.diff"
           sha256 "63376b8fdd6613a91976106d9376069274191860cd58f039b29ff16de1925621"
         end
@@ -112,7 +114,7 @@ RSpec.describe Patch do
 
     it "rejects local file patches with directory" do
       expect do
-        described_class.create(:p1, nil) do
+        klass.create(:p1, nil) do
           file "Patches/foo.diff"
           directory "subdir"
         end
@@ -121,7 +123,7 @@ RSpec.describe Patch do
 
     it "rejects local file patches with apply" do
       expect do
-        described_class.create(:p1, nil) do
+        klass.create(:p1, nil) do
           file "Patches/foo.diff"
           apply "foo.diff"
         end
@@ -130,7 +132,7 @@ RSpec.describe Patch do
   end
 
   describe "#patch_files" do
-    subject(:patch) { described_class.create(:p2, nil) }
+    subject(:patch) { klass.create(:p2, nil) }
 
     context "when the patch is empty" do
       it(:resource) { expect(patch.resource).to be_a Resource::Patch }
@@ -157,7 +159,9 @@ RSpec.describe Patch do
   end
 
   describe ExternalPatch do
-    subject(:patch) { described_class.new(:p1) { url "file:///my.patch" } }
+    subject(:patch) { klass.new(:p1) { url "file:///my.patch" } }
+
+    let(:klass) { ExternalPatch }
 
     describe "#url" do
       it(:url) { expect(patch.url).to eq("file:///my.patch") }

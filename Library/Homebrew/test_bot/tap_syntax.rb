@@ -23,10 +23,12 @@ module Homebrew
 
         return if tapped.formula_files.blank? && tapped.cask_files.blank?
 
-        test "brew", "readall", "--aliases", "--os=all", "--arch=all", tapped.name
+        # Recursive runtime checks are too slow for full-tap `readall` and `audit`.
+        without_recursive_sorbet = { "HOMEBREW_SORBET_RECURSIVE" => nil }
+        test "brew", "readall", "--aliases", "--os=all", "--arch=all", tapped.name, env: without_recursive_sorbet
         return if args.stable?
 
-        test "brew", "audit", "--except=installed", "--tap=#{tapped.name}"
+        test "brew", "audit", "--except=installed", "--tap=#{tapped.name}", env: without_recursive_sorbet
       end
     end
   end

@@ -1,11 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/class"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::ClassName do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
 
+  let(:klass) { RuboCop::Cop::FormulaAudit::ClassName }
   let(:corrected_source) do
     <<~RUBY
       class Foo < Formula

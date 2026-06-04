@@ -72,13 +72,15 @@ module Homebrew
                             "specified, list only its dependencies that are currently installed."
         switch "--missing",
                description: "Show only missing dependencies."
+        # odeprecated: remove in a future release.
         switch "--eval-all",
                description: "Evaluate all available formulae and casks, whether installed or not, to list " \
-                            "their dependencies."
+                            "their dependencies.",
+               env:         :eval_all,
+               hidden:      true
         switch "--for-each",
-               description: "Switch into the mode used by the `--eval-all` option, but only list dependencies " \
-                            "for each provided <formula>, one formula per line. This is used for " \
-                            "debugging the `--installed`/`--eval-all` display mode."
+               description: "Switch into the mode used when evaluating all formulae and casks, but only list " \
+                            "dependencies for each provided <formula>, one formula per line."
         switch "--HEAD",
                description: "Show dependencies for HEAD version instead of stable version."
         flag   "--os=",
@@ -112,6 +114,7 @@ module Homebrew
 
         os, arch = args.os_arch_combinations.fetch(0)
         eval_all = args.eval_all?
+        eval_all ||= args.no_named? && !args.installed? && Homebrew::EnvConfig.tap_trust_configured?
 
         Formulary.enable_factory_cache!
 

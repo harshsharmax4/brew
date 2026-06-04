@@ -6,10 +6,12 @@ require "stringio"
 require "timeout"
 
 RSpec.describe Homebrew::McpServer do
+  let(:klass) { Homebrew::McpServer }
+
   let(:stdin) { StringIO.new }
   let(:stdout) { StringIO.new }
   let(:stderr) { StringIO.new }
-  let(:server) { described_class.new(stdin:, stdout:, stderr:) }
+  let(:server) { klass.new(stdin:, stdout:, stderr:) }
   let(:jsonrpc) { Homebrew::McpServer::JSON_RPC_VERSION }
   let(:id) { Random.rand(1000) }
   let(:code) { Homebrew::McpServer::ERROR_CODE }
@@ -153,6 +155,22 @@ RSpec.describe Homebrew::McpServer do
       end
     end
 
+    it "passes tool arguments as argv when spawning brew" do
+      expect(Open3).to receive(:popen2e)
+        .with(Homebrew::McpServer::HOMEBREW_BREW_FILE, "search", "visual studio;beta")
+        .and_return("output")
+      request = {
+        "id"     => id,
+        "method" => "tools/call",
+        "params" => {
+          "name"      => "search",
+          "arguments" => { "text_or_regex" => "visual studio;beta" },
+        },
+      }
+
+      server.handle_request(request)
+    end
+
     it "responds to tools/call for unknown tool" do
       request = { "id" => id, "method" => "tools/call", "params" => { "name" => "not_a_tool", "arguments" => {} } }
       result = server.handle_request(request)
@@ -186,6 +204,14 @@ RSpec.describe Homebrew::McpServer do
     it "returns an error hash" do
       result = server.respond_error(id, "fail")
       expect(result).to eq({ jsonrpc:, id:, error: { message: "fail", code: } })
+    end
+  end
+
+  describe "#tool_command_arguments" do
+    it "preserves search text as a single raw argv argument" do
+      arguments = { "text_or_regex" => "visual studio;beta" }
+
+      expect(server.tool_command_arguments(:search, arguments)).to eq(["visual studio;beta"])
     end
   end
 

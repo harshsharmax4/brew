@@ -1,7 +1,9 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 RSpec.describe Cask::CaskLoader::FromTapLoader do
+  let(:klass) { Cask::CaskLoader::FromTapLoader }
+
   let(:tap) { CoreCaskTap.instance }
   let(:cask_name) { "testball" }
   let(:cask_full_name) { "homebrew/cask/#{cask_name}" }
@@ -18,18 +20,18 @@ RSpec.describe Cask::CaskLoader::FromTapLoader do
     end
 
     it "returns a Cask" do
-      expect(described_class.new(cask_full_name).load(config: nil)).to be_a(Cask::Cask)
+      expect(klass.new(cask_full_name).load(config: nil)).to be_a(Cask::Cask)
     end
 
     it "raises an error if the Cask cannot be found" do
-      expect { described_class.new("foo/bar/baz").load(config: nil) }.to raise_error(Cask::CaskUnavailableError)
+      expect { klass.new("foo/bar/baz").load(config: nil) }.to raise_error(Cask::CaskUnavailableError)
     end
 
     context "with sharded Cask directory", :no_api do
       let(:cask_path) { tap.cask_dir/cask_name[0]/"#{cask_name}.rb" }
 
       it "returns a Cask" do
-        expect(described_class.new(cask_full_name).load(config: nil)).to be_a(Cask::Cask)
+        expect(klass.new(cask_full_name).load(config: nil)).to be_a(Cask::Cask)
       end
     end
   end

@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/service"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::Service do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::Service }
 
   it "reports offenses when a service block is missing a required command" do
     expect_offense(<<~RUBY)

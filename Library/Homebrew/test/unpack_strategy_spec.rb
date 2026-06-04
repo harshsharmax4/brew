@@ -2,8 +2,10 @@
 # frozen_string_literal: true
 
 RSpec.describe UnpackStrategy do
+  let(:klass) { UnpackStrategy }
+
   describe "#extract_nestedly" do
-    subject(:strategy) { described_class.detect(path) }
+    subject(:strategy) { klass.detect(path) }
 
     let(:unpack_dir) { mktmpdir }
 

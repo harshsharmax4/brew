@@ -4,7 +4,9 @@
 require "options"
 
 RSpec.describe Options do
-  subject(:options) { described_class.new }
+  subject(:options) { klass.new }
+
+  let(:klass) { Options }
 
   it "removes duplicate options" do
     options << Option.new("foo")
@@ -31,26 +33,26 @@ RSpec.describe Options do
 
   describe "#+" do
     it "returns options" do
-      expect(options + described_class.new).to be_an_instance_of(described_class)
+      expect(options + klass.new).to be_an_instance_of(klass)
     end
   end
 
   describe "#-" do
     it "returns options" do
-      expect(options - described_class.new).to be_an_instance_of(described_class)
+      expect(options - klass.new).to be_an_instance_of(klass)
     end
   end
 
   specify "#&" do
     foo, bar, baz = %w[foo bar baz].map { |o| Option.new(o) }
-    other_options = described_class.new << foo << bar
+    other_options = klass.new << foo << bar
     options << foo << baz
     expect((options & other_options).to_a).to eq([foo])
   end
 
   specify "#|" do
     foo, bar, baz = %w[foo bar baz].map { |o| Option.new(o) }
-    other_options = described_class.new << foo << bar
+    other_options = klass.new << foo << bar
     options << foo << baz
     expect((options | other_options).sort).to eq([foo, bar, baz].sort)
   end
@@ -87,7 +89,7 @@ RSpec.describe Options do
     array = %w[--foo --bar]
     option1 = Option.new("foo")
     option2 = Option.new("bar")
-    expect(described_class.create(array).sort).to eq([option1, option2].sort)
+    expect(klass.create(array).sort).to eq([option1, option2].sort)
   end
 
   specify "#to_s" do

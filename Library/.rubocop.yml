@@ -76,6 +76,13 @@ Homebrew/NoFileutilsRmrf:
     - "/**/{Formula,Casks}/**/*.rb"
     - "**/{Formula,Casks}/**/*.rb"
 
+Homebrew/OSDependsOn:
+  Include:
+    - "/**/{Formula,Casks}/**/*.rb"
+    - "**/{Formula,Casks}/**/*.rb"
+  Exclude:
+    - "Homebrew/test/**/*.rb"
+
 # only used internally
 Homebrew/MoveToExtendOS:
   Enabled: false
@@ -264,6 +271,9 @@ RSpec/NestedGroups:
 RSpec/MultipleMemoizedHelpers:
   Enabled: false
 
+# Better for Sorbet if we don't use `described_class`.
+RSpec/DescribedClass:
+  EnforcedStyle: explicit
 RSpec/DescribedClassModuleWrapping:
   Enabled: true
 # Annoying to have these autoremoved.

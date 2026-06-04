@@ -218,6 +218,10 @@ RSpec.describe Cask::DSL, :cask, :no_api do
         end
       end
 
+      # Required for Sorbet, but the actual value is set in the individual
+      # examples which provide their `let(:languages)` value to `before`.
+      let(:languages) { [] }
+
       before do
         config = cask.config
         config.languages = languages
@@ -476,8 +480,26 @@ RSpec.describe Cask::DSL, :cask, :no_api do
     context "when bare macOS and a macOS version are used" do
       let(:token) { "invalid-depends-on-macos-bare-and-version" }
 
-      it "refuses to load" do
-        expect { cask }.to raise_error(Cask::CaskInvalidError)
+      it "allows the migration-only combination" do
+        expect(cask.depends_on.macos).to eq(MacOSRequirement.new([:monterey], comparator: ">="))
+        expect(cask.depends_on.requires_macos?).to be true
+      end
+    end
+
+    context "when bare macOS and a block-scoped macOS version are used" do
+      it "allows the active block to provide the macOS version" do
+        Homebrew::SimulateSystem.with(os: :tahoe, arch: :intel) do
+          cask = Cask::Cask.new("with-block-scoped-macos-version") do
+            depends_on :macos
+
+            on_intel do
+              depends_on macos: :ventura
+            end
+          end
+
+          expect(cask.depends_on.macos).to eq(MacOSRequirement.new([:ventura], comparator: ">="))
+          expect(cask.depends_on.requires_macos?).to be true
+        end
       end
     end
   end

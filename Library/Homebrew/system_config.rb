@@ -90,6 +90,9 @@ module SystemConfig
       `uname -m`.chomp
     end
 
+    sig { returns(T.nilable(String)) }
+    def windows_version; end
+
     sig { returns(String) }
     def describe_git
       return "N/A" unless Utils::Git.available?
@@ -164,6 +167,8 @@ module SystemConfig
       end
 
       Homebrew::EnvConfig::ENVS.each do |env, hash|
+        next if hash[:hidden] && !ENV.key?(env.to_s)
+
         method_name = Homebrew::EnvConfig.env_method_name(env, hash)
 
         if hash[:boolean]

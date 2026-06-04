@@ -13,6 +13,8 @@ class CurlPostDownloadStrategy < CurlDownloadStrategy
             .returns(T.nilable(SystemCommand::Result))
   }
   def _fetch(url:, resolved_url:, timeout:)
+    ensure_no_insecure_redirect!(url:, resolved_url:)
+
     args = if meta.key?(:data)
       escape_data = ->(d) { ["-d", URI.encode_www_form([d])] }
       [url, *meta[:data].flat_map(&escape_data)]

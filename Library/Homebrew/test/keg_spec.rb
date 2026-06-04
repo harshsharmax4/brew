@@ -1,10 +1,16 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "keg"
 require "stringio"
 
 RSpec.describe Keg do
+  let(:klass) { Keg }
+  let(:dst) { HOMEBREW_PREFIX/"bin"/"helloworld" }
+  let(:nonexistent) { Pathname.new("/some/nonexistent/path") }
+  let!(:keg) { setup_test_keg("foo", "1.0") }
+  let(:kegs) { [] }
+
   include FileUtils
 
   def setup_test_keg(name, version)
@@ -15,15 +21,10 @@ RSpec.describe Keg do
       touch path/"bin"/file
     end
 
-    keg = described_class.new(path)
+    keg = klass.new(path)
     kegs << keg
     keg
   end
-
-  let(:dst) { HOMEBREW_PREFIX/"bin"/"helloworld" }
-  let(:nonexistent) { Pathname.new("/some/nonexistent/path") }
-  let!(:keg) { setup_test_keg("foo", "1.0") }
-  let(:kegs) { [] }
 
   before do
     (HOMEBREW_PREFIX/"bin").mkpath
@@ -36,7 +37,7 @@ RSpec.describe Keg do
   end
 
   specify "::all" do
-    expect(described_class.all).to eq([keg])
+    expect(klass.all).to eq([keg])
   end
 
   specify "#empty_installation?" do
@@ -167,6 +168,20 @@ RSpec.describe Keg do
       expect(link.lstat).to be_a_directory
     end
 
+    specify "lib/cps directory is created" do
+      link = HOMEBREW_PREFIX/"lib"/"cps"
+      (keg/"lib"/"cps").mkpath
+      keg.link
+      expect(link.lstat).to be_a_directory
+    end
+
+    specify "share/cps directory is created" do
+      link = HOMEBREW_PREFIX/"share"/"cps"
+      (keg/"share"/"cps").mkpath
+      keg.link
+      expect(link.lstat).to be_a_directory
+    end
+
     specify "symlinks are linked directly" do
       link = HOMEBREW_PREFIX/"lib"/"pkgconfig"
 
@@ -260,8 +275,8 @@ RSpec.describe Keg do
       (a/"lib"/"example2").make_symlink "example"
       (b/"lib"/"example2").mkpath
 
-      a = described_class.new(a)
-      b = described_class.new(b)
+      a = klass.new(a)
+      b = klass.new(b)
       a.link
 
       lib = HOMEBREW_PREFIX/"lib"
@@ -274,7 +289,7 @@ RSpec.describe Keg do
       a = HOMEBREW_CELLAR/"a"/"1.0"
       (a/"lib"/"foo").mkpath
 
-      keg = described_class.new(a)
+      keg = klass.new(a)
 
       link = HOMEBREW_PREFIX/"lib"/"foo"
       link.parent.mkpath
@@ -292,7 +307,7 @@ RSpec.describe Keg do
       oldname_opt_record.make_relative_symlink(HOMEBREW_CELLAR/"foo/1.0")
       keg_record = HOMEBREW_CELLAR/"foo"/"2.0"
       (keg_record/"bin").mkpath
-      keg = described_class.new(keg_record)
+      keg = klass.new(keg_record)
       keg.optlink
       expect(keg_record).to eq(oldname_opt_record.resolved_path)
       keg.uninstall

@@ -5,6 +5,8 @@ require "language/python"
 require "utils/shebang"
 
 RSpec.describe Language::Python::Shebang do
+  let(:klass) { Language::Python::Shebang }
+
   let(:file) { Tempfile.new("python-shebang") }
   let(:broken_file) { Tempfile.new("python-shebang") }
   let(:f) do
@@ -57,7 +59,7 @@ RSpec.describe Language::Python::Shebang do
     it "can be used to replace Python shebangs" do
       allow(Formulary).to receive(:factory).with(f[:python311].name).and_return(f[:python311])
       Utils::Shebang.rewrite_shebang(
-        described_class.detected_python_shebang(f[:versioned_python_dep], use_python_from_path: false), file.path
+        klass.detected_python_shebang(f[:versioned_python_dep], use_python_from_path: false), file.path
       )
 
       expect(File.read(file)).to eq <<~EOS
@@ -70,7 +72,7 @@ RSpec.describe Language::Python::Shebang do
 
     it "can be pointed to a `python3` in PATH" do
       Utils::Shebang.rewrite_shebang(
-        described_class.detected_python_shebang(f[:versioned_python_dep], use_python_from_path: true), file.path
+        klass.detected_python_shebang(f[:versioned_python_dep], use_python_from_path: true), file.path
       )
 
       expect(File.read(file)).to eq <<~EOS
@@ -83,8 +85,8 @@ RSpec.describe Language::Python::Shebang do
 
     it "can fix broken shebang line `#!python`" do
       Utils::Shebang.rewrite_shebang(
-        described_class.detected_python_shebang(f[:versioned_python_dep],
-                                                use_python_from_path: true), broken_file.path
+        klass.detected_python_shebang(f[:versioned_python_dep],
+                                      use_python_from_path: true), broken_file.path
       )
 
       expect(File.read(broken_file)).to eq <<~EOS
@@ -98,7 +100,7 @@ RSpec.describe Language::Python::Shebang do
     it "errors if formula doesn't depend on python" do
       expect do
         Utils::Shebang.rewrite_shebang(
-          described_class.detected_python_shebang(f[:no_deps], use_python_from_path: false),
+          klass.detected_python_shebang(f[:no_deps], use_python_from_path: false),
           file.path,
         )
       end.to raise_error(ShebangDetectionError, "Cannot detect Python shebang: formula does not depend on Python.")
@@ -107,7 +109,7 @@ RSpec.describe Language::Python::Shebang do
     it "errors if formula depends on more than one python" do
       expect do
         Utils::Shebang.rewrite_shebang(
-          described_class.detected_python_shebang(f[:multiple_deps], use_python_from_path: false),
+          klass.detected_python_shebang(f[:multiple_deps], use_python_from_path: false),
           file.path,
         )
       end.to raise_error(

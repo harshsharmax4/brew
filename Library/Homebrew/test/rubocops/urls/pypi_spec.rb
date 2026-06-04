@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/urls"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::PyPiUrls do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::PyPiUrls }
 
   context "when a pypi URL is used" do
     it "reports an offense for pypi.python.org urls" do

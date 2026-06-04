@@ -13,7 +13,7 @@ class CaskDescriptionCacheStore < DescriptionCacheStore
   #
   # @return [nil]
   sig { override.params(eval_all: T::Boolean).void }
-  def populate_if_empty!(eval_all: Homebrew::EnvConfig.eval_all?)
+  def populate_if_empty!(eval_all: Homebrew::EnvConfig.tap_trust_configured?)
     return unless eval_all
     return unless database.empty?
 
@@ -27,7 +27,7 @@ class CaskDescriptionCacheStore < DescriptionCacheStore
   # @return [nil]
   sig { override.params(report: ReporterHub).void }
   def update_from_report!(report)
-    unless Homebrew::EnvConfig.eval_all?
+    unless Homebrew::EnvConfig.tap_trust_configured?
       database.clear!
       return
     end
@@ -47,7 +47,7 @@ class CaskDescriptionCacheStore < DescriptionCacheStore
   # @return [nil]
   sig { params(cask_tokens: T::Array[String]).void }
   def update_from_cask_tokens!(cask_tokens)
-    unless Homebrew::EnvConfig.eval_all?
+    unless Homebrew::EnvConfig.tap_trust_configured?
       database.clear!
       return
     end

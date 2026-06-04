@@ -4,6 +4,8 @@
 require "utils/backtrace"
 
 RSpec.describe Utils::Backtrace do
+  let(:klass) { Utils::Backtrace }
+
   let(:backtrace_no_sorbet_paths) do
     [
       "/Library/Homebrew/downloadable.rb:75:in",
@@ -58,34 +60,34 @@ RSpec.describe Utils::Backtrace do
   end
 
   before do
-    allow(described_class).to receive(:sorbet_runtime_path)
+    allow(klass).to receive(:sorbet_runtime_path)
       .and_return("/Library/Homebrew/vendor/bundle/ruby/2.6.0/gems/sorbet-runtime")
     allow(Context).to receive(:current).and_return(Context::ContextStruct.new(verbose: false))
   end
 
   it "handles nil backtrace" do
     exception = exception_with backtrace: nil
-    expect(described_class.clean(exception)).to be_nil
+    expect(klass.clean(exception)).to be_nil
   end
 
   it "handles empty array backtrace" do
     exception = exception_with backtrace: []
-    expect(described_class.clean(exception)).to eq []
+    expect(klass.clean(exception)).to eq []
   end
 
   it "removes sorbet paths when top error is not from sorbet" do
     exception = exception_with backtrace: backtrace_with_sorbet_paths
-    expect(described_class.clean(exception)).to eq backtrace_no_sorbet_paths
+    expect(klass.clean(exception)).to eq backtrace_no_sorbet_paths
   end
 
   it "includes sorbet paths when top error is not from sorbet and verbose is set" do
     allow(Context).to receive(:current).and_return(Context::ContextStruct.new(verbose: true))
     exception = exception_with backtrace: backtrace_with_sorbet_paths
-    expect(described_class.clean(exception)).to eq backtrace_with_sorbet_paths
+    expect(klass.clean(exception)).to eq backtrace_with_sorbet_paths
   end
 
   it "doesn't change backtrace when error is from sorbet" do
     exception = exception_with backtrace: backtrace_with_sorbet_error
-    expect(described_class.clean(exception)).to eq backtrace_with_sorbet_error
+    expect(klass.clean(exception)).to eq backtrace_with_sorbet_error
   end
 end

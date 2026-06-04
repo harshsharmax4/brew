@@ -4,25 +4,27 @@
 require "bundle_version"
 
 RSpec.describe Homebrew::BundleVersion do
+  let(:klass) { Homebrew::BundleVersion }
+
   describe "#<=>" do
     it "compares both the `short_version` and `version`" do
-      expect(described_class.new("1.2.3", "3000")).to be < described_class.new("1.2.3", "4000")
-      expect(described_class.new("1.2.3", "4000")).to be <= described_class.new("1.2.3", "4000")
-      expect(described_class.new("1.2.3", "4000")).to be >= described_class.new("1.2.3", "4000")
-      expect(described_class.new("1.2.4", "4000")).to be > described_class.new("1.2.3", "4000")
+      expect(klass.new("1.2.3", "3000")).to be < klass.new("1.2.3", "4000")
+      expect(klass.new("1.2.3", "4000")).to be <= klass.new("1.2.3", "4000")
+      expect(klass.new("1.2.3", "4000")).to be >= klass.new("1.2.3", "4000")
+      expect(klass.new("1.2.4", "4000")).to be > klass.new("1.2.3", "4000")
     end
 
     it "compares `version` first" do
-      expect(described_class.new("1.2.4", "3000")).to be < described_class.new("1.2.3", "4000")
+      expect(klass.new("1.2.4", "3000")).to be < klass.new("1.2.3", "4000")
     end
 
     it "does not fail when `short_version` or `version` is missing" do
-      expect(described_class.new("1.06", nil)).to be < described_class.new("1.12", "1.12")
-      expect(described_class.new("1.06", "471")).to be > described_class.new(nil, "311")
-      expect(described_class.new("1.2.3", nil)).to be < described_class.new("1.2.4", nil)
-      expect(described_class.new(nil, "1.2.3")).to be < described_class.new(nil, "1.2.4")
-      expect(described_class.new("1.2.3", nil)).to be < described_class.new(nil, "1.2.3")
-      expect(described_class.new(nil, "1.2.3")).to be > described_class.new("1.2.3", nil)
+      expect(klass.new("1.06", nil)).to be < klass.new("1.12", "1.12")
+      expect(klass.new("1.06", "471")).to be > klass.new(nil, "311")
+      expect(klass.new("1.2.3", nil)).to be < klass.new("1.2.4", nil)
+      expect(klass.new(nil, "1.2.3")).to be < klass.new(nil, "1.2.4")
+      expect(klass.new("1.2.3", nil)).to be < klass.new(nil, "1.2.3")
+      expect(klass.new(nil, "1.2.3")).to be > klass.new("1.2.3", nil)
     end
   end
 
@@ -43,7 +45,7 @@ RSpec.describe Homebrew::BundleVersion do
 
     expected_mappings.each do |(short_version, version), expected_version|
       it "maps (#{short_version.inspect}, #{version.inspect}) to #{expected_version.inspect}" do
-        expect(described_class.new(short_version, version).nice_version)
+        expect(klass.new(short_version, version).nice_version)
           .to eq expected_version
       end
     end
@@ -51,11 +53,11 @@ RSpec.describe Homebrew::BundleVersion do
 
   describe "#to_h" do
     it "returns a hash containing non-nil instance variables" do
-      expect(described_class.new("1.2.3", "3000").to_h)
+      expect(klass.new("1.2.3", "3000").to_h)
         .to eq({ short_version: "1.2.3", version: "3000" })
-      expect(described_class.new(nil, "3000").to_h)
+      expect(klass.new(nil, "3000").to_h)
         .to eq({ version: "3000" })
-      expect(described_class.new("1.2.3", nil).to_h)
+      expect(klass.new("1.2.3", nil).to_h)
         .to eq({ short_version: "1.2.3" })
     end
   end

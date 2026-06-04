@@ -9,7 +9,6 @@ require "tab"
 require "sbom"
 require "keg"
 require "formula_versions"
-require "utils/inreplace"
 require "erb"
 require "utils/gzip"
 require "api"
@@ -82,6 +81,7 @@ module Homebrew
         switch "--no-all-checks",
                depends_on:  "--merge",
                description: "Don't try to create an `all` bottle or stop a no-change upload."
+        # odeprecated: replace with `HOMEBREW_GIT_COMMITTER_NAME` and `HOMEBREW_GIT_COMMITTER_EMAIL`.
         flag   "--committer=",
                description: "Specify a committer name and email in `git`'s standard author format."
         flag   "--root-url=",
@@ -358,6 +358,7 @@ module Homebrew
         return if gnu_tar_formula.blank?
 
         gnu_tar_formula.ensure_installed!(reason: "bottling")
+        gnu_tar_formula
       end
 
       sig { params(mtime: String, default_tar: T::Boolean).returns([String, T::Array[String]]) }

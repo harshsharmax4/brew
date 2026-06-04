@@ -1,6 +1,9 @@
 # typed: strict
 
+module EnvSensitive; end
+
 module EnvActivation
+  include EnvSensitive
   include SharedEnvExtension
 end
 

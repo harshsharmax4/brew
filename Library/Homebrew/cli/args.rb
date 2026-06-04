@@ -128,7 +128,11 @@ module Homebrew
       def os_arch_combinations
         skip_invalid_combinations = false
 
-        oses = case (os_sym = @table[:os]&.to_sym)
+        # `--all-platforms` is equivalent to `--os=all --arch=all`.
+        all_platforms = @table[:all_platforms?]
+
+        os_sym = all_platforms ? :all : @table[:os]&.to_sym
+        oses = case os_sym
         when nil
           [SimulateSystem.current_os]
         when :all
@@ -139,7 +143,8 @@ module Homebrew
           [os_sym]
         end
 
-        arches = case (arch_sym = @table[:arch]&.to_sym)
+        arch_sym = all_platforms ? :all : @table[:arch]&.to_sym
+        arches = case arch_sym
         when nil
           [SimulateSystem.current_arch]
         when :all

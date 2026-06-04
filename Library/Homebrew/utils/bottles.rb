@@ -51,7 +51,7 @@ module Utils
 
       sig { params(filename: String).returns(T::Array[String]) }
       def extname_tag_rebuild(filename)
-        HOMEBREW_BOTTLES_EXTNAME_REGEX.match(filename).to_a
+        HOMEBREW_BOTTLES_EXTNAME_REGEX.match(filename).to_a.map(&:to_s)
       end
 
       sig { params(bottle_file: Pathname).returns(T.nilable(String)) }

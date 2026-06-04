@@ -5,6 +5,18 @@
 # $4 System root directory (unused)
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)"
+if [[ -f "${script_dir}/macos_user.sh" ]]
+then
+  # `pkgbuild` stages this helper beside the package scripts.
+  # shellcheck disable=SC1091
+  source "${script_dir}/macos_user.sh"
+else
+  # This fallback keeps direct local execution from the repository working.
+  # shellcheck disable=SC1091
+  source "${script_dir}/../../Library/Homebrew/utils/macos_user.sh"
+fi
+
 # disable analytics while installing
 export HOMEBREW_NO_ANALYTICS_THIS_RUN=1
 export HOMEBREW_NO_ANALYTICS_MESSAGE_OUTPUT=1
@@ -72,14 +84,12 @@ fi
 mkdir -vp Caskroom Cellar Frameworks etc include lib opt sbin share var/homebrew/linked
 
 # optionally define an install user at /var/tmp/.homebrew_pkg_user.plist
-homebrew_pkg_user_plist="/var/tmp/.homebrew_pkg_user.plist"
-if [[ -f "${homebrew_pkg_user_plist}" ]] && [[ -n $(defaults read "${homebrew_pkg_user_plist}" HOMEBREW_PKG_USER) ]]
-then
-  homebrew_pkg_user=$(defaults read /var/tmp/.homebrew_pkg_user HOMEBREW_PKG_USER)
 # otherwise, get valid logged in user
-else
-  homebrew_pkg_user=$(echo "show State:/Users/ConsoleUser" | scutil | awk '/Name :/ { print $3 }')
-fi
+homebrew_pkg_user="$(homebrew-package-user)" ||
+  {
+    echo "No valid user for Homebrew installation. Log in before install or specify an install user."
+    exit 1
+  }
 
 # set permissions
 chmod ug=rwx Caskroom Cellar Frameworks bin etc include lib opt sbin share var var/homebrew var/homebrew/linked
@@ -93,11 +103,15 @@ else
 fi
 
 # move API cache to ~/Library/Caches/Homebrew
-user_home_dir=$(dscl . read /Users/"${homebrew_pkg_user}" NFSHomeDirectory | awk '{ print $2 }')
+user_home_dir="$(homebrew-user-home "${homebrew_pkg_user}")" ||
+  {
+    echo "No home directory for Homebrew installation user: ${homebrew_pkg_user}"
+    exit 1
+  }
 user_cache_dir="${user_home_dir}/Library/Caches/Homebrew"
 user_api_cache_dir="${user_cache_dir}/api"
 mkdir -vp "${user_api_cache_dir}"
-mv -v "${homebrew_directory}/cache_api/"* "${user_api_cache_dir}"
+cp -vpR "${homebrew_directory}/cache_api/." "${user_api_cache_dir}"
 chown -R "${homebrew_pkg_user}:staff" "${user_cache_dir}"
 rm -vrf "${homebrew_directory}/cache_api"
 

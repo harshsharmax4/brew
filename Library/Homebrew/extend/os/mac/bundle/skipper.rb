@@ -13,7 +13,10 @@ module OS
 
           sig { params(entry: Homebrew::Bundle::Dsl::Entry, silent: T::Boolean).returns(T::Boolean) }
           def skip?(entry, silent: false)
-            if linux_only_entry?(entry)
+            if entry.type == :winget
+              Kernel.puts Formatter.warning "Skipping #{entry.type} #{entry.name} (requires WSL)" unless silent
+              true
+            elsif linux_only_entry?(entry)
               unless silent
                 Kernel.puts Formatter.warning "Skipping #{entry.type} #{entry.name} (unsupported on macOS)"
               end

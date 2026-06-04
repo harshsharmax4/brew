@@ -12,6 +12,7 @@ require "cask/utils"
 require "cask/reinstall"
 require "upgrade"
 require "api"
+require "trust"
 
 module Homebrew
   module Cmd
@@ -39,8 +40,11 @@ module Homebrew
         switch "-v", "--verbose",
                description: "Print the verification and post-install steps."
         switch "--ask",
-               description: "Ask for confirmation before downloading and upgrading formulae. " \
-                            "Print download, install and net install sizes of bottles and dependencies.",
+               description: "Ask for confirmation before downloading and reinstalling. " \
+                            "Print what would be reinstalled before prompting. Only prompts if the plan " \
+                            "includes dependencies or dependants; if the requested formulae or casks are the " \
+                            "only things to reinstall, it only prints the plan. The confirmation prompt is " \
+                            "skipped without a TTY.",
                env:         :ask
         [
           [:switch, "--formula", "--formulae", {
@@ -121,6 +125,7 @@ module Homebrew
           [],
           T::Array[T.any(FormulaOrCaskUnavailableError, NoSuchKegError)],
         )
+        Homebrew::Trust.trust_fully_qualified_items!(args.named, type: args.only_formula_or_cask)
 
         args.named.to_formulae_and_casks_and_unavailable(method: :resolve).each do |item|
           case item
@@ -144,9 +149,20 @@ module Homebrew
           end
         end
 
-        formulae = Homebrew::Attestation.sort_formulae_for_install(formulae) if Homebrew::Attestation.enabled?
+        if Homebrew::EnvConfig.verify_attestations?
+          formulae = Homebrew::Attestation.sort_formulae_for_install(formulae)
+        end
+        casks = casks.filter_map do |cask|
+          if cask.pinned?
+            onoe "#{cask.full_name} is pinned. You must unpin it to reinstall."
+            next
+          end
+          cask
+        end
         shared_download_queue = T.let(nil, T.nilable(Homebrew::DownloadQueue))
         casks_prefetched = T.let(false, T::Boolean)
+
+        Install.ask_casks casks, action: "reinstallation", skip_cask_deps: args.skip_cask_deps? if args.ask?
 
         unless formulae.empty?
           Install.perform_preinstall_checks_once
@@ -190,8 +206,24 @@ module Homebrew
 
           formulae_installers = reinstall_contexts.map(&:formula_installer)
 
-          # Main block: if asking the user is enabled, show dependency and size information.
-          Install.ask_formulae(formulae_installers, dependants, args: args) if args.ask?
+          # Main block: if asking the user is enabled, show dry-run information.
+          if args.ask?
+            Install.ask_formulae(
+              formulae_installers,
+              dependants,
+              action:                     "reinstallation",
+              flags:                      args.flags_only,
+              force_bottle:               args.force_bottle?,
+              build_from_source_formulae: args.build_from_source_formulae,
+              interactive:                args.interactive?,
+              keep_tmp:                   args.keep_tmp?,
+              debug_symbols:              args.debug_symbols?,
+              force:                      args.force?,
+              debug:                      args.debug?,
+              quiet:                      args.quiet?,
+              verbose:                    args.verbose?,
+            )
+          end
 
           valid_formula_installers = if casks.any?
             shared_download_queue = Homebrew::DownloadQueue.new(pour: true)
@@ -220,7 +252,7 @@ module Homebrew
                   defer_fetch:    true,
                 )
               end
-              Install.enqueue_cask_installers(fetch_cask_installers)
+              Install.enqueue_cask_installers(fetch_cask_installers, download_queue: shared_download_queue)
               shared_download_queue.fetch
               casks_prefetched = true
               valid_formula_installers
@@ -256,7 +288,6 @@ module Homebrew
         end
 
         if casks.any?
-          Install.ask_casks casks if args.ask?
           begin
             Cask::Reinstall.reinstall_casks(
               *casks,

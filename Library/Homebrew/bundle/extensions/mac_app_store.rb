@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "bundle/extensions/extension"
+require "json"
 
 module Homebrew
   module Bundle
@@ -27,9 +28,9 @@ module Homebrew
           false
         end
 
-        sig { override.returns(T::Boolean) }
-        def dump_disable_supported?
-          false
+        sig { override.returns(T.nilable(String)) }
+        def cleanup_heading
+          "Mac App Store apps"
         end
 
         sig { override.params(name: String, options: Homebrew::Bundle::EntryInputOptions).returns(Dsl::Entry) }
@@ -102,6 +103,41 @@ module Homebrew
         def dump_entry(package)
           app = T.cast(package, App)
           "mas #{quote(app.name)}, id: #{app.id}"
+        end
+
+        sig { params(app: App).returns(String) }
+        def cleanup_item(app)
+          JSON.generate("id" => app.id, "name" => app.name)
+        end
+
+        sig { override.params(item: String).returns(String) }
+        def cleanup_item_name(item)
+          app = parse_cleanup_item(item)
+          "#{app.name} (#{app.id})"
+        end
+
+        sig { override.params(entries: T::Array[Dsl::Entry]).returns(T::Array[String]) }
+        def cleanup_items(entries)
+          return [].freeze unless package_manager_installed?
+
+          kept_app_ids = entries.filter_map do |entry|
+            entry.options[:id].to_s if entry.type == type
+          end
+          return [].freeze if kept_app_ids.empty?
+
+          packages.reject { |app| app.id.to_i.zero? || kept_app_ids.any? { |id| app.id.to_i == id.to_i } }
+                  .map { |app| cleanup_item(app) }
+        end
+
+        sig { override.params(items: T::Array[String]).void }
+        def cleanup!(items)
+          mas = package_manager_executable
+          return if mas.nil?
+
+          items.each do |item|
+            Bundle.system(mas, "uninstall", parse_cleanup_item(item).id, verbose: false)
+          end
+          puts "Uninstalled #{items.size} Mac App Store app#{"s" if items.size != 1}"
         end
 
         sig { params(id: Integer).returns(T::Boolean) }
@@ -200,12 +236,26 @@ module Homebrew
           end
 
           puts "Installing #{name} app. It is not currently installed." if verbose
-          return false unless Bundle.system(mas, "get", id.to_s, verbose:)
+          installed = Bundle.system(mas, "install", id.to_s, verbose:) ||
+                      Bundle.system(mas, "get", id.to_s, verbose:)
+          return false unless installed
 
           apps << [id.to_s, name] unless apps.any? { |app_id, _app_name| app_id.to_i == id }
           packages << App.new(id: id.to_s, name:) unless packages.any? { |app| app.id.to_i == id }
           installed_app_ids << id.to_s unless installed_app_ids.include?(id.to_s)
           true
+        end
+
+        sig { params(item: String).returns(App) }
+        def parse_cleanup_item(item)
+          parsed = JSON.parse(item)
+          raise TypeError, "Invalid Mac App Store cleanup item: #{item}" unless parsed.is_a?(Hash)
+
+          id = parsed["id"]
+          name = parsed["name"]
+          raise TypeError, "Invalid Mac App Store cleanup item: #{item}" if !id.is_a?(String) || !name.is_a?(String)
+
+          App.new(id:, name:)
         end
       end
 

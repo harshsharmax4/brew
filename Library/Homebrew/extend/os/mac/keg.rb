@@ -39,18 +39,11 @@ module OS
         end
       end
 
-      sig { params(path: ::Pathname).void }
-      def initialize(path)
-        super
-
-        @require_relocation = T.let(false, T::Boolean)
-      end
-
       sig { params(id: String, file: MachOShim).returns(T::Boolean) }
       def change_dylib_id(id, file)
         return false if file.dylib_id == id
 
-        @require_relocation = true
+        require_relocation!
         odebug "Changing dylib ID of #{file}\n  from #{file.dylib_id}\n    to #{id}"
         file.change_dylib_id(id, strict: false)
         true
@@ -67,7 +60,7 @@ module OS
       def change_install_name(old, new, file)
         return false if old == new
 
-        @require_relocation = true
+        require_relocation!
         odebug "Changing install name in #{file}\n  from #{old}\n    to #{new}"
         file.change_install_name(old, new, strict: false)
         true
@@ -84,7 +77,7 @@ module OS
       def change_rpath(old, new, file)
         return false if old == new
 
-        @require_relocation = true
+        require_relocation!
         odebug "Changing rpath in #{file}\n  from #{old}\n    to #{new}"
         file.change_rpath(old, new, strict: false)
         true

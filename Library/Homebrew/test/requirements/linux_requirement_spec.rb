@@ -4,7 +4,9 @@
 require "requirements/linux_requirement"
 
 RSpec.describe LinuxRequirement do
-  subject(:requirement) { described_class.new }
+  subject(:requirement) { klass.new }
+
+  let(:klass) { LinuxRequirement }
 
   describe "#satisfied?" do
     it "returns true on Linux" do

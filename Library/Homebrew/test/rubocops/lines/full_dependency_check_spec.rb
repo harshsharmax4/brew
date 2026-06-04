@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/lines"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::FullDependencyCheck do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::FullDependencyCheck }
 
   context "when auditing -full dependencies in homebrew/core" do
     it "reports an offense when a formula depends on a -full formula" do

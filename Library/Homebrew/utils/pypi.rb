@@ -1,7 +1,6 @@
 # typed: strict
 # frozen_string_literal: true
 
-require "utils/inreplace"
 require "utils/output"
 require "utils/ast"
 require "time"
@@ -373,6 +372,7 @@ module PyPI
         exclude_packages.delete package
         next
       end
+      next if existing_resources_by_name[T.must(package.name)]&.livecheck_defined?
 
       ohai "Getting PyPI info for \"#{package}\"" if show_info
       name, url, checksum, version, package_error = package.pypi_info(ignore_errors: ignore_errors)
@@ -438,36 +438,16 @@ module PyPI
       Please update the resources manually.
     EOS
 
-    # Check whether resources already exist (excluding virtualenv dependencies)
-    if formula.resources.all? { |resource| resource.name.start_with?("homebrew-") }
-      # Place resources above install method
-      inreplace_regex = /  def install/
-      resource_section += "  def install"
-    else
-      # Replace existing resource blocks with new resource blocks
-      inreplace_regex = /
-        \ \ (
-        (\#\ RESOURCE-ERROR:\ .*\s+)*
-        resource\ .*\ do\s+
-          url\ .*\s+
-          sha256\ .*\s+
-          ((\#.*\s+)*
-          patch\ (.*\ )?do\s+
-            url\ .*\s+
-            sha256\ .*\s+
-          end\s+)*
-        end\s+)+
-      /x
-      resource_section += "  "
-    end
-
     ohai "Updating resource blocks" unless silent
-    Utils::Inreplace.inreplace formula.path do |s|
-      if s.inreplace_string.split(/^  test do\b/, 2).fetch(0).scan(inreplace_regex).length > 1
-        odie "Unable to update resource blocks for \"#{formula.name}\" automatically. Please update them manually."
-      end
-      s.sub! inreplace_regex, resource_section
+    formula_ast = Utils::AST::FormulaAST.new(formula.path.read)
+    if formula_ast.replace_resource_stanzas(
+      resource_section,
+      replace_existing:   formula.resources.any? { |resource| !resource.name.start_with?("homebrew-") },
+      preserve_livecheck: true,
+    ) == :multiple_groups
+      odie "Unable to update resource blocks for \"#{formula.name}\" automatically. Please update them manually."
     end
+    formula.path.atomic_write(formula_ast.process)
 
     if package_errors.present?
       ofail "Unable to resolve some dependencies. Please check #{formula.path} for RESOURCE-ERROR comments."

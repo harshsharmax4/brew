@@ -4,6 +4,9 @@
 module Homebrew
   module TestBot
     class FormulaeDependents < TestFormulae
+      DependentWithDependencies = T.type_alias { [Formula, T::Array[Dependency]] }
+      private_constant :DependentWithDependencies
+
       sig { params(testing_formulae: T::Array[String]).returns(T::Array[String]) }
       attr_writer :testing_formulae
 
@@ -24,10 +27,17 @@ module Homebrew
         @testing_formulae_with_tested_dependents = T.let([], T::Array[String])
         @tested_dependents_list = T.let(nil, T.nilable(Pathname))
         @dependent_testing_formulae = T.let([], T::Array[String])
+        @tested_dependents = T.let([], T::Array[String])
+        @formulae_dependents_filter = T.let(nil, T.nilable(T::Array[String]))
+        @dependent_pairs_by_formula = T.let({}, T::Hash[String, T::Array[DependentWithDependencies]])
       end
 
       sig { params(args: Homebrew::Cmd::TestBotCmd::Args).void }
       def run!(args:)
+        if args.formulae_dependents_shard.present? && !args.only_formulae_dependents?
+          raise UsageError, "`--formulae-dependents-shard` requires `--only-formulae-dependents`."
+        end
+
         test "brew", "untap", "--force", "homebrew/cask" if !tap&.core_cask_tap? && CoreCaskTap.instance.installed?
 
         installable_bottles = @tested_formulae - @skipped_or_failed_formulae
@@ -54,6 +64,16 @@ module Homebrew
           end,
           T.nilable(T::Array[String]),
         )
+
+        if args.formulae_dependents_shard.present?
+          dependent_pairs = @dependent_testing_formulae.flat_map do |formula_name|
+            dependent_pairs_for_formula(Formulary.factory(formula_name), formula_name, args:)
+          end
+          dependent_pairs.uniq! { |dependent, _| dependent.full_name }
+
+          @formulae_dependents_filter = dependents_for_shard(dependent_pairs, args.formulae_dependents_shard.to_s)
+                                        .map { |dependent, _| dependent.full_name }
+        end
 
         @dependent_testing_formulae.each do |formula_name|
           dependent_formulae!(formula_name, args:)
@@ -137,6 +157,8 @@ module Homebrew
         bottled_dependents.each do |dependent|
           install_dependent(dependent, testable_dependents, args:)
         end
+
+        @tested_dependents |= (source_dependents + bottled_dependents).map(&:full_name)
       end
 
       sig {
@@ -146,60 +168,13 @@ module Homebrew
       def dependents_for_formula(formula, formula_name, args:)
         info_header "Determining dependents..."
 
-        # Always skip recursive dependents on Intel. It's really slow.
-        # Also skip recursive dependents on Linux unless it's a Linux-only formula.
-        #
-        skip_recursive_dependents = skip_recursive_dependents?(formula, args:)
-
-        uses_args = %w[--formula --eval-all]
-        uses_include_test_args = [*uses_args, "--include-test"]
-        uses_include_test_args << "--recursive" unless skip_recursive_dependents
-        dependents = with_env(HOMEBREW_STDERR: "1") do
-          Utils.safe_popen_read("brew", "uses", *uses_include_test_args, formula_name)
-               .split("\n")
-        end
-
-        # TODO: Consider handling the following case better.
-        #       `foo` has a build dependency on `bar`, and `bar` has a runtime dependency on
-        #       `baz`. When testing `baz` with `--build-dependents-from-source`, `foo` is
-        #       not tested, but maybe should be.
-        dependents += with_env(HOMEBREW_STDERR: "1") do
-          Utils.safe_popen_read("brew", "uses", *uses_args, "--include-build", formula_name)
-               .split("\n")
-        end
-        dependents.uniq!
-        dependents.sort!
-
-        dependents -= @tested_formulae
-        dependents = dependents.map { |d| Formulary.factory(d) }
-
-        dependents = dependents.zip(dependents.map do |f|
-          if skip_recursive_dependents
-            f.deps.reject(&:implicit?)
-          else
-            begin
-              Dependency.expand(f, cache_key: "test-bot-dependents") do |_, dependency|
-                next Dependable::SKIP if dependency.implicit?
-                next Dependable::KEEP_BUT_PRUNE_RECURSIVE_DEPS if dependency.build? || dependency.test?
-              end
-            rescue TapFormulaUnavailableError => e
-              raise if e.tap.installed?
-
-              e.tap.clear_cache
-              safe_system "brew", "tap", e.tap.name
-              retry
-            end
-          end.reject(&:optional?)
-        end)
-
-        # Defer formulae which could be tested later
-        # i.e. formulae that also depend on something else yet to be built in this test run.
-        unless args.only_formulae_dependents?
-          dependents.reject! do |_, deps|
-            still_to_test = @dependent_testing_formulae - @testing_formulae_with_tested_dependents
-            deps.map { |d| d.to_formula.full_name }.intersect?(still_to_test)
+        dependents = dependent_pairs_for_formula(formula, formula_name, args:)
+        if (filter = @formulae_dependents_filter)
+          dependents = dependents.select do |dependent, _|
+            filter.include?(dependent.name) || filter.include?(dependent.full_name)
           end
         end
+        dependents.reject! { |dependent, _| @tested_dependents.include?(dependent.full_name) }
 
         # Split into dependents that we could potentially be building from source and those
         # we should not. The criteria is that a dependent must have bottled dependencies, and
@@ -238,6 +213,140 @@ module Homebrew
         puts testable_dependents
 
         [source_dependents, bottled_dependents, testable_dependents]
+      end
+
+      sig {
+        params(formula: Formula, formula_name: String, args: Homebrew::Cmd::TestBotCmd::Args)
+          .returns(T::Array[DependentWithDependencies])
+      }
+      def dependent_pairs_for_formula(formula, formula_name, args:)
+        @dependent_pairs_by_formula[formula_name] ||= begin
+          # Always skip recursive dependents on Intel. It's really slow.
+          # Also skip recursive dependents on Linux unless it's a Linux-only formula.
+          #
+          skip_recursive_dependents = skip_recursive_dependents?(formula, args:)
+
+          uses_args = %w[--formula]
+          uses_include_test_args = [*uses_args, "--include-test"]
+          uses_include_test_args << "--recursive" unless skip_recursive_dependents
+          uses_env = require_current_tap_trust_env.merge("HOMEBREW_STDERR" => "1")
+          dependents = with_env(uses_env) do
+            Utils.safe_popen_read("brew", "uses", *uses_include_test_args, formula_name)
+                 .split("\n")
+          end
+
+          # TODO: Consider handling the following case better.
+          #       `foo` has a build dependency on `bar`, and `bar` has a runtime dependency on
+          #       `baz`. When testing `baz` with `--build-dependents-from-source`, `foo` is
+          #       not tested, but maybe should be.
+          dependents += with_env(uses_env) do
+            Utils.safe_popen_read("brew", "uses", *uses_args, "--include-build", formula_name)
+                 .split("\n")
+          end
+          dependents.uniq!
+          dependents.sort!
+
+          dependents -= @tested_formulae
+          dependents = dependents.map { |d| Formulary.factory(d) }
+
+          dependents = dependents.zip(dependents.map do |f|
+            if skip_recursive_dependents
+              f.deps.reject(&:implicit?)
+            else
+              begin
+                Dependency.expand(f, cache_key: "test-bot-dependents") do |_, dependency|
+                  next Dependable::SKIP if dependency.implicit?
+                  next Dependable::KEEP_BUT_PRUNE_RECURSIVE_DEPS if dependency.build? || dependency.test?
+                end
+              rescue TapFormulaUnavailableError => e
+                raise if e.tap.installed?
+
+                e.tap.clear_cache
+                safe_system "brew", "tap", e.tap.name
+                retry
+              end
+            end.reject(&:optional?)
+          end)
+
+          # Defer formulae which could be tested later
+          # i.e. formulae that also depend on something else yet to be built in this test run.
+          unless args.only_formulae_dependents?
+            dependents.reject! do |_, deps|
+              still_to_test = @dependent_testing_formulae - @testing_formulae_with_tested_dependents
+              deps.map { |d| d.to_formula.full_name }.intersect?(still_to_test)
+            end
+          end
+
+          dependents
+        end
+      end
+
+      sig {
+        params(
+          dependents: T::Array[DependentWithDependencies],
+          shard:      String,
+        ).returns(T::Array[DependentWithDependencies])
+      }
+      def dependents_for_shard(dependents, shard)
+        unless shard.match?(%r{\A[1-9]\d*/[1-9]\d*\z})
+          raise UsageError, "`--formulae-dependents-shard` must use the format <SHARD/TOTAL>."
+        end
+
+        shard_parts = shard.split("/", 2)
+        shard_index = shard_parts.fetch(0).to_i
+        shard_count = shard_parts.fetch(1).to_i
+        if shard_index > shard_count
+          raise UsageError, "`--formulae-dependents-shard` must not be greater than the total shard count."
+        end
+
+        return dependents if shard_count == 1
+
+        dependents_by_name = dependents.to_h { |dependent, deps| [dependent.full_name, [dependent, deps]] }
+        edges = dependents.to_h { |dependent, _| [dependent.full_name, T.let([], T::Array[String])] }
+
+        dependents.each do |dependent, deps|
+          deps.each do |dep|
+            dep_name = dep.to_formula.full_name
+            next unless edges.key?(dep_name)
+
+            edges.fetch(dependent.full_name) << dep_name
+            edges.fetch(dep_name) << dependent.full_name
+          end
+        end
+
+        seen = T.let([], T::Array[String])
+        groups = T.let([], T::Array[T::Array[DependentWithDependencies]])
+
+        dependents.map(&:first).each do |dependent|
+          next if seen.include?(dependent.full_name)
+
+          group = T.let([], T::Array[DependentWithDependencies])
+          queue = T.let([dependent.full_name], T::Array[String])
+
+          until queue.empty?
+            name = queue.fetch(0)
+            queue.shift
+            next if seen.include?(name)
+
+            seen << name
+            group << dependents_by_name.fetch(name)
+            queue.concat(edges.fetch(name).reject { |edge| seen.include?(edge) })
+          end
+
+          groups << group
+        end
+
+        shards = Array.new(shard_count) { T.let([], T::Array[DependentWithDependencies]) }
+        groups.sort_by { |group| [-group.count, group.map { |dependent, _| dependent.full_name }.min.to_s] }
+              .each do |group|
+          shard_index = 0
+          shards.each_with_index do |current_shard, index|
+            shard_index = index if current_shard.count < shards.fetch(shard_index).count
+          end
+          shards.fetch(shard_index).concat(group)
+        end
+
+        shards.fetch(shard_index - 1).sort_by { |dependent, _| dependent.full_name }
       end
 
       sig {

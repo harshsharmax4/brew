@@ -200,7 +200,7 @@ class GitHubPackages
     @schema_json&.fetch(uri.to_s.gsub(/#.*/, ""))
   end
 
-  sig { params(schema_uri: String, json: T::Hash[String, T.untyped]).void }
+  sig { params(schema_uri: String, json: T::Hash[T.any(String, Symbol), T.untyped]).void }
   def validate_schema!(schema_uri, json)
     schema = JSONSchemer.schema(@schema_json&.fetch(schema_uri), ref_resolver: method(:schema_resolver))
     json = json.deep_stringify_keys
@@ -368,6 +368,7 @@ class GitHubPackages
 
     manifests += bottle_hash["bottle"]["tags"].map do |bottle_tag, tag_hash|
       bottle_tag = Utils::Bottles::Tag.from_symbol(bottle_tag.to_sym)
+      all_bottle = bottle_tag.to_sym == :all
 
       tag = GitHubPackages.version_rebuild(version, rebuild, bottle_tag.to_s)
 
@@ -439,7 +440,7 @@ class GitHubPackages
         "sh.brew.bottle.size"               => local_file_size.to_s,
         "sh.brew.bottle.installed_size"     => tag_hash["installed_size"].to_s,
         "sh.brew.license"                   => license,
-        "sh.brew.tab"                       => tab.to_json,
+        "sh.brew.tab"                       => (all_bottle ? tab.except("arch", "built_on") : tab).to_json,
         "sh.brew.path_exec_files"           => path_exec_files_string,
       }.compact_blank
 
@@ -477,9 +478,9 @@ class GitHubPackages
         mediaType:   "application/vnd.oci.image.manifest.v1+json",
         digest:      "sha256:#{manifest_json_sha256}",
         size:        manifest_json_size,
-        platform:    platform_hash,
+        platform:    all_bottle ? nil : platform_hash,
         annotations: descriptor_annotations_hash,
-      }
+      }.compact
     end
 
     index_json_sha256, index_json_size = write_image_index(manifests, blobs, formula_annotations_hash)
@@ -524,7 +525,7 @@ class GitHubPackages
     tar_gz_sha256
   end
 
-  sig { params(platform_hash: T::Hash[String, T.untyped], tar_sha256: String, blobs: Pathname).returns([String, Integer]) }
+  sig { params(platform_hash: T::Hash[T.any(String, Symbol), T.untyped], tar_sha256: String, blobs: Pathname).returns([String, Integer]) }
   def write_image_config(platform_hash, tar_sha256, blobs)
     image_config = platform_hash.merge({
       rootfs: {
@@ -536,7 +537,7 @@ class GitHubPackages
     write_hash(blobs, image_config)
   end
 
-  sig { params(manifests: T::Array[T::Hash[String, T.untyped]], blobs: Pathname, annotations: T::Hash[String, String]).returns([String, Integer]) }
+  sig { params(manifests: T::Array[T::Hash[T.any(String, Symbol), T.untyped]], blobs: Pathname, annotations: T::Hash[String, String]).returns([String, Integer]) }
   def write_image_index(manifests, blobs, annotations)
     image_index = {
       schemaVersion: 2,
@@ -562,7 +563,7 @@ class GitHubPackages
     write_hash(root, index_json, "index.json")
   end
 
-  sig { params(directory: Pathname, hash: T::Hash[String, T.untyped], filename: T.nilable(String)).returns([String, Integer]) }
+  sig { params(directory: Pathname, hash: T::Hash[T.any(String, Symbol), T.untyped], filename: T.nilable(String)).returns([String, Integer]) }
   def write_hash(directory, hash, filename = nil)
     json = JSON.pretty_generate(hash)
     sha256 = Digest::SHA256.hexdigest(json)

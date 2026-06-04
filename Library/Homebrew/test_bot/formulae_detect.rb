@@ -4,6 +4,10 @@
 module Homebrew
   module TestBot
     class FormulaeDetect < Test
+      # Formulae must have GitHub homepages and stable URLs, no stable dependencies,
+      # one executable and one library between them.
+      DEFAULT_TEST_FORMULAE = %w[libdeflate bats-core].freeze
+
       sig { returns(T::Array[String]) }
       attr_reader :testing_formulae, :added_formulae, :deleted_formulae
 
@@ -161,14 +165,15 @@ module Homebrew
 
         if args.test_default_formula?
           # Build the default test formulae.
-          modified_formulae << "libfaketime" << "xz"
+          modified_formulae += DEFAULT_TEST_FORMULAE
         elsif @added_formulae.present? &&
               @added_formulae.all? { |formula| formula.start_with?("portable-") }
           @added_formulae = ["portable-ruby"]
         elsif modified_formulae.present? &&
               modified_formulae.all? { |formula| formula.start_with?("portable-") }
           modified_formulae = ["portable-ruby"]
-        elsif modified_formulae.any? { |formula| formula.start_with?("portable-") }
+        elsif modified_formulae.any? { |formula| formula.start_with?("portable-") } &&
+              !(ENV["GITHUB_EVENT_NAME"] == "merge_group" && args.only_formulae_detect?)
           odie "Portable Ruby (and related formulae) cannot be tested in the same job as other formulae!"
         end
 

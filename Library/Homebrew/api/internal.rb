@@ -96,6 +96,7 @@ module Homebrew
 
         Homebrew::API.write_names_file!(formula_hashes.keys, "formula", regenerate:)
         Homebrew::API.write_aliases_file!(formula_aliases, "formula", regenerate:)
+        Homebrew::API.write_executables_file!(formula_hashes, regenerate:)
       end
 
       sig { params(regenerate: T::Boolean).void }

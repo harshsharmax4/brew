@@ -5,8 +5,10 @@ require "formula"
 require "cxxstdlib"
 
 RSpec.describe CxxStdlib do
-  let(:clang) { described_class.create(:libstdcxx, :clang) }
-  let(:lcxx) { described_class.create(:libcxx, :clang) }
+  let(:klass) { CxxStdlib }
+
+  let(:clang) { klass.create(:libstdcxx, :clang) }
+  let(:lcxx) { klass.create(:libcxx, :clang) }
 
   describe "#type_string" do
     specify "formatting" do

@@ -30,9 +30,11 @@ module Homebrew
                description: "Print the number of unbottled and total formulae."
         switch "--lost",
                description: "Print the `homebrew/core` commits where bottles were lost in the last week."
+        # odeprecated: remove in a future release.
         switch "--eval-all",
                description: "Evaluate all available formulae and casks, whether installed or not, to check them.",
-               env:         :eval_all
+               env:         :eval_all,
+               hidden:      true
 
         conflicts "--dependents", "--total", "--lost"
 
@@ -75,15 +77,19 @@ module Homebrew
 
         Homebrew::SimulateSystem.with(os:, arch:) do
           eval_all = args.eval_all?
+          eval_all ||= args.named.blank? && (args.total? || args.dependents?) &&
+                       Homebrew::EnvConfig.tap_trust_configured?
 
           if args.total? && !eval_all
-            raise UsageError, "`brew unbottled --total` needs `--eval-all` passed or `HOMEBREW_EVAL_ALL=1` set!"
+            raise UsageError,
+                  "`brew unbottled --total` needs `HOMEBREW_REQUIRE_TAP_TRUST=1` or " \
+                  "`HOMEBREW_NO_REQUIRE_TAP_TRUST=1` set!"
           end
 
           if args.named.blank?
             ohai "Getting formulae..."
           elsif eval_all
-            raise UsageError, "Cannot specify formulae when using `--eval-all`/`--total`."
+            raise UsageError, "Cannot specify formulae when evaluating all formulae or using `--total`."
           end
 
           formulae, all_formulae, formula_installs = formulae_all_installs_from_args(eval_all)
@@ -125,7 +131,9 @@ module Homebrew
           formulae = all_formulae = args.named.to_formulae
         elsif args.dependents?
           unless eval_all
-            raise UsageError, "`brew unbottled --dependents` needs `--eval-all` passed or `HOMEBREW_EVAL_ALL=1` set!"
+            raise UsageError,
+                  "`brew unbottled --dependents` needs `HOMEBREW_REQUIRE_TAP_TRUST=1` or " \
+                  "`HOMEBREW_NO_REQUIRE_TAP_TRUST=1` set!"
           end
 
           formulae = all_formulae = Formula.all(eval_all:)

@@ -1,14 +1,14 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "resource"
 require "livecheck"
 
 RSpec.describe Resource do
-  subject(:resource) { described_class.new("test") }
+  subject(:resource) { Resource.new("test") }
 
   let(:livecheck_resource) do
-    described_class.new do
+    Resource.new do
       url "https://brew.sh/foo-1.0.tar.gz"
       sha256 "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
@@ -162,6 +162,7 @@ RSpec.describe Resource do
       allow(resource.downloader).to receive(:_fetch) do
         resource.downloader.temporary_path.dirname.mkpath
         FileUtils.cp tarball, resource.downloader.temporary_path
+        FileUtils.touch resource.downloader.temporary_path, mtime: last_modified
       end
     end
 
@@ -175,7 +176,7 @@ RSpec.describe Resource do
   end
 
   describe "#owner" do
-    let(:owner) { described_class.new("test-owner") }
+    let(:owner) { Resource.new("test-owner") }
 
     it "sets the owner" do
       resource.owner = owner

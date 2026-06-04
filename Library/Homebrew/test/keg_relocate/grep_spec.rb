@@ -1,11 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "keg_relocate"
 
 RSpec.describe Keg do
-  subject(:keg) { described_class.new(HOMEBREW_CELLAR/"foo/1.0.0") }
+  subject(:keg) { klass.new(HOMEBREW_CELLAR/"foo/1.0.0") }
 
+  let(:klass) { Keg }
   let(:dir) { HOMEBREW_CELLAR/"foo/1.0.0" }
   let(:text_file) { dir/"file.txt" }
   let(:binary_file) { dir/"file.bin" }

@@ -23,9 +23,11 @@ module Homebrew
                description: "Verify any alias symlinks in each tap."
         switch "--syntax",
                description: "Syntax-check all of Homebrew's Ruby files (if no <tap> is passed)."
+        # odeprecated: remove in a future release.
         switch "--eval-all",
                description: "Evaluate all available formulae and casks, whether installed or not.",
-               env:         :eval_all
+               env:         :eval_all,
+               hidden:      true
         switch "--no-simulate",
                description: "Don't simulate other system configurations when checking formulae and casks."
 
@@ -48,9 +50,13 @@ module Homebrew
           }
           options[:os_arch_combinations] = args.os_arch_combinations if args.os || args.arch
 
+          eval_all = args.eval_all?
+          eval_all ||= args.no_named? && Homebrew::EnvConfig.tap_trust_configured?
           taps = if args.no_named?
-            unless args.eval_all?
-              raise UsageError, "`brew readall` needs a tap or `--eval-all` passed or `HOMEBREW_EVAL_ALL=1` set!"
+            unless eval_all
+              raise UsageError,
+                    "`brew readall` needs a tap, `HOMEBREW_REQUIRE_TAP_TRUST=1` or " \
+                    "`HOMEBREW_NO_REQUIRE_TAP_TRUST=1` set!"
             end
 
             Tap.installed

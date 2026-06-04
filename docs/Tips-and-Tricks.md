@@ -43,6 +43,22 @@ This imports the `brew` environment into your existing shell; `gem` will pick up
 brew install --only-dependencies <formula>
 ```
 
+## Run a script with Homebrew formulae on `PATH`
+
+Use `brew exec` to install formulae required by a script and run it with those formulae's executable directories on `PATH`:
+
+```sh
+brew exec --formulae=jq,yq -- ./script.sh
+```
+
+Pass a comma-separated formula list with `--formulae`, then put the command and its arguments after `--`. Homebrew installs missing formulae, prepends their `bin` and `sbin` paths and the corresponding dependency paths, then replaces itself with the command. The command may be a path, which is useful for portable scripts, demos and CI bootstrap code that need Homebrew tools without writing a `Brewfile`.
+
+On systems with `env -S`, a script can declare this in its shebang:
+
+```sh
+#!/usr/bin/env -S brew exec --formulae=jq,yq --
+```
+
 ## Use the interactive Homebrew shell
 
 ```console

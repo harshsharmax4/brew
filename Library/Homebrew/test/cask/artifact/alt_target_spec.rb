@@ -2,11 +2,13 @@
 # frozen_string_literal: true
 
 RSpec.describe Cask::Artifact::App, :cask do
+  let(:klass) { Cask::Artifact::App }
+
   describe "activate to alternate target" do
     let(:cask) { Cask::CaskLoader.load(cask_path("with-alt-target")) }
 
     let(:install_phase) do
-      cask.artifacts.grep(described_class).each do |artifact|
+      cask.artifacts.grep(klass).each do |artifact|
         artifact.install_phase(command: NeverSudoSystemCommand, force: false)
       end
     end

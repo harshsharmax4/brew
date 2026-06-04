@@ -1099,6 +1099,50 @@ end
 
 Any initialization steps that aren't necessarily part of the install process can be located in a `post_install` block, such as setup commands or data directory creation. This block can be re-run separately with `brew postinstall <formula>`.
 
+For simple file preparation, prefer [`post_install_steps`](/rubydoc/Formula.html#post_install_steps-class_method). These steps are stored in the JSON API and do not require evaluating formula Ruby. A `post_install_steps` block may only contain the supported step calls with literal arguments. It cannot call the wider formula DSL or arbitrary Ruby code.
+
+```ruby
+class Foo < Formula
+  # ...
+  url "https://example.com/foo-1.0.tar.gz"
+
+  post_install_steps do
+    mkdir_p "log/foo"
+    touch "foo/state"
+    mv "default.conf", "foo/default.conf"
+    ln_s "cert.pem", "foo/cert.pem", source_base: :relative
+  end
+  # ...
+end
+```
+
+A formula may define either `post_install_steps` or `post_install`, not both.
+
+#### File preparation steps
+
+`mkdir`, `mkdir_p` and `touch` default to paths relative to `var`. `move`, `mv`, `move_children`, `symlink`, `ln_s` and `ln_sf` default their source and target paths to `prefix`. Use `base:`, `source_base:` or `target_base:` when a step needs another formula path such as `pkgetc`; use `source_base: :relative` for relative symlink sources.
+
+* `mkdir`: create one directory; example: `mkdir "log/foo"`.
+* `mkdir_p`: create a directory and any missing parents; example: `mkdir_p "log/foo"`.
+* `touch`: create or update a file timestamp; example: `touch "foo/state"`.
+* `move`: move one file or directory; example: `move "default.conf", "foo/default.conf"`.
+* `mv`: alias for `move`; example: `mv "default.conf", "foo/default.conf"`.
+* `move_children`: move the contents of one directory into another; example: `move_children "defaults", "foo/defaults"`.
+* `symlink`: create a symlink; example: `symlink "cert.pem", "foo/cert.pem", source_base: :relative`.
+* `ln_s`: alias for `symlink`; example: `ln_s "cert.pem", "foo/cert.pem", source_base: :relative`.
+* `ln_sf`: create or replace a symlink; example: `ln_sf "cert.pem", "foo/cert.pem", source_base: :relative`.
+
+#### Desktop and cache rebuild steps
+
+These steps rebuild shared desktop and cache state using Homebrew-owned tools.
+
+* `compile_gsettings_schemas`: compile GSettings schemas in `share/glib-2.0/schemas`.
+* `gio_querymodules`: rebuild the GIO module cache in `lib/gio/modules`.
+* `gdk_pixbuf_query_loaders`: update the GDK Pixbuf loader cache.
+* `gtk_update_icon_cache`: refresh the `hicolor` GTK icon cache.
+* `update_mime_database`: rebuild the shared MIME database in `share/mime`.
+* `update_desktop_database`: rebuild the desktop entry database in `share/applications`.
+
 ```ruby
 class Foo < Formula
   # ...

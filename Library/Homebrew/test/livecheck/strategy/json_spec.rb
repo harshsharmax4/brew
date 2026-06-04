@@ -1,16 +1,15 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "livecheck/strategy"
 
 RSpec.describe Homebrew::Livecheck::Strategy::Json do
-  subject(:json) { described_class }
+  subject(:json) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Strategy::Json }
   let(:http_url) { "https://brew.sh/blog/" }
   let(:non_http_url) { "ftp://brew.sh/" }
-
   let(:regex) { /^v?(\d+(?:\.\d+)+)$/i }
-
   let(:content) do
     <<~EOS
       {
@@ -40,7 +39,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Json do
     EOS
   end
   let(:content_simple) { '{"version":"1.2.3"}' }
-
   let(:matches) do
     {
       content: ["1.1.2", "1.1.1", "1.1.0", "1.0.3", "1.0.2", "1.0.1", "1.0.0"],

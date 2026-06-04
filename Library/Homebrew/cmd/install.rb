@@ -13,6 +13,7 @@ require "development_tools"
 require "install"
 require "cleanup"
 require "upgrade"
+require "trust"
 
 module Homebrew
   module Cmd
@@ -46,8 +47,11 @@ module Homebrew
         switch "-n", "--dry-run",
                description: "Show what would be installed, but do not actually install anything."
         switch "--ask",
-               description: "Ask for confirmation before downloading and installing formulae. " \
-                            "Print download and install sizes of bottles and dependencies.",
+               description: "Ask for confirmation before downloading and installing. " \
+                            "Print the same plan as `--dry-run` before prompting. Only prompts if the plan " \
+                            "includes dependencies or dependants; if the requested formulae or casks are the " \
+                            "only things to install, it only prints the plan. The confirmation prompt is " \
+                            "skipped without a TTY.",
                env:         :ask
         [
           [:switch, "--formula", "--formulae", {
@@ -195,6 +199,7 @@ module Homebrew
 
           tap&.ensure_installed!
         end
+        Homebrew::Trust.trust_fully_qualified_items!(args.named, type: args.only_formula_or_cask)
 
         if args.ignore_dependencies?
           opoo <<~EOS
@@ -215,23 +220,8 @@ module Homebrew
         upgrade_casks = T.let([], T::Array[Cask::Cask])
         fetch_casks = T.let([], T::Array[Cask::Cask])
         if casks.any?
-          Install.ask_casks casks if args.ask?
           if args.dry_run?
-            if (casks_to_install = casks.reject(&:installed?).presence)
-              ohai "Would install #{::Utils.pluralize("cask", casks_to_install.count, include_count: true)}:"
-              puts casks_to_install.map(&:full_name).join(" ")
-            end
-            casks.each do |cask|
-              dep_names = CaskDependent.new(cask)
-                                       .runtime_dependencies
-                                       .reject(&:installed?)
-                                       .map(&:name)
-              next if dep_names.blank?
-
-              ohai "Would install #{::Utils.pluralize("dependency", dep_names.count, include_count: true)} " \
-                   "for #{cask.full_name}:"
-              puts dep_names.join(" ")
-            end
+            Install.print_dry_run_casks(casks, skip_cask_deps: args.skip_cask_deps?, include_installed: false)
             return
           end
 
@@ -245,9 +235,12 @@ module Homebrew
             upgrade_casks = Cask::Upgrade.outdated_casks(casks, args:, force: true, quiet: true)
             new_casks | upgrade_casks
           end
+          Install.ask_casks fetch_casks, skip_cask_deps: args.skip_cask_deps? if args.ask?
         end
 
-        formulae = Homebrew::Attestation.sort_formulae_for_install(formulae) if Homebrew::Attestation.enabled?
+        if Homebrew::EnvConfig.verify_attestations?
+          formulae = Homebrew::Attestation.sort_formulae_for_install(formulae)
+        end
 
         # if the user's flags will prevent bottle only-installations when no
         # developer tools are available, we need to stop them early on
@@ -325,8 +318,30 @@ module Homebrew
           dry_run:                    args.dry_run?,
         )
 
-        # Main block: if asking the user is enabled, show dependency and size information.
-        Install.ask_formulae(formulae_installer, dependants, args: args) if args.ask?
+        # Main block: if asking the user is enabled, show dry-run information.
+        if args.ask?
+          Install.ask_formulae(
+            formulae_installer,
+            dependants,
+            flags:                      args.flags_only,
+            force_bottle:               args.force_bottle?,
+            build_from_source_formulae: args.build_from_source_formulae,
+            interactive:                args.interactive?,
+            keep_tmp:                   args.keep_tmp?,
+            debug_symbols:              args.debug_symbols?,
+            force:                      args.force?,
+            debug:                      args.debug?,
+            quiet:                      args.quiet?,
+            verbose:                    args.verbose?,
+          )
+        end
+
+        if formulae_installer.any? && fetch_casks.empty? && !args.ask? && !args.dry_run? &&
+           !Homebrew::EnvConfig.no_env_hints?
+          puts "Inspect the formula dependency plan before installing with `brew install --ask`."
+          puts "Enable ask mode by setting `HOMEBREW_ASK=1`."
+          puts "Hide these hints with `HOMEBREW_NO_ENV_HINTS=1` (see `man brew`)."
+        end
 
         if !args.dry_run? && (formulae_installer.any? || fetch_casks.any?)
           download_queue = Homebrew::DownloadQueue.new(pour: true)
@@ -358,7 +373,7 @@ module Homebrew
                 )
               end
 
-              Install.enqueue_cask_installers(fetch_cask_installers)
+              Install.enqueue_cask_installers(fetch_cask_installers, download_queue:)
             end
 
             download_queue.fetch

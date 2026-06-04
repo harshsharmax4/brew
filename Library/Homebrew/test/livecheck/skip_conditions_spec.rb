@@ -5,8 +5,9 @@ require "livecheck/livecheck"
 require "livecheck/skip_conditions"
 
 RSpec.describe Homebrew::Livecheck::SkipConditions do
-  subject(:skip_conditions) { described_class }
+  subject(:skip_conditions) { klass }
 
+  let(:klass) { Homebrew::Livecheck::SkipConditions }
   let(:formulae) do
     {
       basic:               formula("test") do
@@ -77,7 +78,6 @@ RSpec.describe Homebrew::Livecheck::SkipConditions do
       end,
     }
   end
-
   let(:casks) do
     {
       basic:                                 Cask::Cask.new("test") do
@@ -181,7 +181,6 @@ RSpec.describe Homebrew::Livecheck::SkipConditions do
       end,
     }
   end
-
   let(:status_hashes) do
     {
       formula: {

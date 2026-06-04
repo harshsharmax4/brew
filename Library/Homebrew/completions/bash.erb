@@ -3,7 +3,9 @@
 #
 # - For changes to a command under `COMMANDS` or `DEVELOPER COMMANDS` sections):
 #   - Find the source file in `Library/Homebrew/[dev-]cmd/<command>.{rb,sh}`.
-#   - For `.rb` files, edit the `cmd_args` block.
+#   - For `.rb` files, edit the `cmd_args` block. For subcommand metadata,
+#     edit `Library/Homebrew/<command>/subcommand.rb` and
+#     `Library/Homebrew/<command>/subcommand/*.rb` if they exist.
 #   - For `.sh` files, edit the top comment, being sure to use the line prefix
 #     `#:` for the comments to be recognized as documentation. If in doubt,
 #     compare with already documented commands.
@@ -111,7 +113,6 @@ __brew_complete_commands() {
 
   local cur="${COMP_WORDS[COMP_CWORD]}"
   local cmds
-  local -a cmd_aliases
 
   if [[ -n ${__HOMEBREW_COMMANDS} ]]
   then
@@ -123,15 +124,33 @@ __brew_complete_commands() {
   then
     cmds="$(< "${HOMEBREW_REPOSITORY}/completions/internal_commands_list.txt")"
   fi
-  while read -r alias; do cmd_aliases+=("${alias}"); done < <(compgen -W "$(__brew_list_aliases)")
-  [[ -n ${cmd_aliases[*]+"${cmd_aliases[*]}"} ]] && cmds+=" ${cmd_aliases[*]} alias unalias"
-  while read -r line; do COMPREPLY+=("${line}"); done < <(compgen -W "${cmds}" -- "${cur}")
+  while read -r line
+  do
+    [[ $(__brew_internal_command_alias "${line}") == "${line}" ]] || continue
+    COMPREPLY+=("${line}")
+  done < <(compgen -W "${cmds}" -- "${cur}")
   export __HOMEBREW_COMMANDS=${cmds}
+}
+
+__brew_complete_services() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  local services
+  services="$(command find "$(brew --cellar)" -mindepth 3 -maxdepth 3 -name '*.service' \
+    | awk -F'homebrew.|.service' '{print $3}' \
+    | sort -d)"
+  while read -r line; do COMPREPLY+=("${line}"); done < <(compgen -W "${services}" -- "${cur}")
 }
 
 # compopt is only available in newer versions of bash
 __brew_complete_files() {
   command -v compopt &> /dev/null && compopt -o default
+}
+
+__brew_internal_command_alias() {
+  case "$1" in
+    <%= aliases.join("\n    ") + "\n" %>
+    *) echo "$1" ;;
+  esac
 }
 
 # https://github.com/Homebrew/homebrew-aliases
@@ -183,6 +202,8 @@ _brew() {
     __brew_complete_commands
     return
   fi
+
+  cmd="$(__brew_internal_command_alias "${cmd}")"
 
   # subcommands have their own completion functions
   case "${cmd}" in

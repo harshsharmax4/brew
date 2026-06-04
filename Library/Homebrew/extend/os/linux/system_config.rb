@@ -55,13 +55,65 @@ module OS
           out
         end
 
+        sig { returns(T.nilable(String)) }
+        def windows_version
+          return unless OS.wsl?
+
+          cmd = Kernel.which("cmd.exe", ORIGINAL_PATHS) || ::Pathname.new("/mnt/c/Windows/System32/cmd.exe")
+          return unless cmd.executable?
+
+          windows_registry_version(cmd) || Utils.popen_read(cmd, "/d", "/c", "ver", err: :close)
+                                                .delete("\r")
+                                                .lines
+                                                .map(&:strip)
+                                                .find { |line| line.start_with?("Microsoft Windows") }
+        end
+
+        sig { params(cmd: ::Pathname).returns(T.nilable(String)) }
+        def windows_registry_version(cmd)
+          values = windows_registry_values(cmd)
+          product_name = values["ProductName"]
+          build = values["CurrentBuildNumber"]
+          return if product_name.blank? || build.blank?
+
+          product_name = product_name.sub(/\AWindows 10\b/, "Windows 11") if build.to_i >= 22_000
+          build += ".#{values["UBR"]}" if values["UBR"].present?
+
+          version = values["DisplayVersion"] || values["ReleaseId"]
+          return "#{product_name} [#{build}]" if version.blank?
+
+          "#{product_name} (#{version}) [#{build}]"
+        end
+
+        sig { params(cmd: ::Pathname).returns(T::Hash[String, String]) }
+        def windows_registry_values(cmd)
+          output = Utils.popen_read(cmd, "/d", "/c", "reg", "query",
+                                    "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+                                    err: :close)
+
+          output.each_line.with_object({}) do |line, values|
+            match = line.delete("\r").match(/^\s*(\S+)\s+REG_\S+\s+(.+?)\s*$/)
+            next if match.nil?
+
+            key = match[1]
+            value = match[2]
+            next if key.nil? || value.nil?
+
+            values[key] = value.start_with?("0x") ? value.to_i(16).to_s : value
+          end
+        end
+
         sig { params(out: T.any(File, StringIO, IO)).void }
         def dump_verbose_config(out = $stdout)
           kernel = Utils.safe_popen_read("uname", "-mors").chomp
           super
           out.puts "Kernel: #{kernel}"
           out.puts "OS: #{OS::Linux.os_version}"
-          out.puts "WSL: #{OS::Linux.wsl_version}" if OS::Linux.wsl?
+          if OS.wsl?
+            out.puts "WSL: #{OS::Linux.wsl_version}"
+            windows = windows_version
+            out.puts "Windows: #{windows}" if windows
+          end
           out.puts "Host glibc: #{host_glibc_version}"
           out.puts "Host libstdc++: #{host_libstdcxx_version}"
           out.puts "#{::DevelopmentTools.host_gcc_path}: #{host_gcc_version}"

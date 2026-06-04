@@ -1,72 +1,7 @@
 # Documentation defined in Library/Homebrew/cmd/which-formula.rb
 
-# HOMEBREW_CACHE is set by utils/ruby.sh
-# HOMEBREW_LIBRARY is set by bin/brew
-# HOMEBREW_API_DEFAULT_DOMAIN HOMEBREW_CURL_SPEED_LIMIT  HOMEBREW_CURL_SPEED_TIME HOMEBREW_USER_AGENT_CURL are set by brew.sh
 # shellcheck disable=SC2154
-ENDPOINT="internal/executables.txt"
-DATABASE_FILE="${HOMEBREW_CACHE}/api/${ENDPOINT}"
-
-is_formula_installed() {
-  local name="$1"
-  if [[ -d "${HOMEBREW_CELLAR}/${name}" ]]
-  then
-    return 0
-  else
-    return 1
-  fi
-}
-
-is_file_fresh() {
-  if [[ -n "${HOMEBREW_MACOS}" ]]
-  then
-    STAT_PRINTF=("/usr/bin/stat" "-f")
-  else
-    STAT_PRINTF=("/usr/bin/stat" "-c")
-  fi
-
-  local file_mtime
-  local current_time
-  local auto_update_secs
-
-  file_mtime=$("${STAT_PRINTF[@]}" %m "${DATABASE_FILE}")
-  current_time=$(date +%s)
-  auto_update_secs=${HOMEBREW_API_AUTO_UPDATE_SECS:-450}
-
-  [[ $((current_time - auto_update_secs)) -lt ${file_mtime} ]]
-}
-
-download_and_cache_executables_file() {
-  source "${HOMEBREW_LIBRARY}/Homebrew/utils/helpers.sh"
-  if [[ -s "${DATABASE_FILE}" ]] && ([[ -n "${HOMEBREW_SKIP_UPDATE}" ]] || is_file_fresh)
-  then
-    return
-  else
-    local url
-    url="${HOMEBREW_API_DEFAULT_DOMAIN}/${ENDPOINT}"
-
-    if [[ -n "${CI}" ]]
-    then
-      max_time=""
-      retries="3"
-    else
-      max_time=10
-      retries=0
-    fi
-    mkdir -p "${DATABASE_FILE%/*}"
-    ${HOMEBREW_CURL} \
-      --compressed \
-      --speed-limit "${HOMEBREW_CURL_SPEED_LIMIT}" --speed-time "${HOMEBREW_CURL_SPEED_TIME}" \
-      --location --remote-time --output "${DATABASE_FILE}" \
-      ${max_time:+--max-time "${max_time}"} \
-      ${retries:+--retry "${retries}" --retry-delay 0 --retry-max-time 60} \
-      --user-agent "${HOMEBREW_USER_AGENT_CURL}" \
-      "${url}"
-    touch "${DATABASE_FILE}"
-
-    git config --file="${HOMEBREW_REPOSITORY}/.git/config" --bool homebrew.commandnotfound true 2>/dev/null
-  fi
-}
+source "${HOMEBREW_LIBRARY}/Homebrew/utils/executables.sh"
 
 homebrew-which-formula() {
   local args=()
@@ -76,10 +11,6 @@ homebrew-which-formula() {
     case "$1" in
       --explain)
         HOMEBREW_EXPLAIN=1
-        shift
-        ;;
-      --skip-update)
-        HOMEBREW_SKIP_UPDATE=1
         shift
         ;;
       --*)
@@ -102,22 +33,14 @@ homebrew-which-formula() {
 
   for cmd in "${args[@]}"
   do
-    download_and_cache_executables_file
+    ensure_executables_file
 
     local formulae=()
-    local formula cmds_text
-
-    while IFS=':' read -r formula cmds_text
+    local formula
+    while read -r formula
     do
-      [[ -z "${formula}" ]] && continue
-      [[ -z "${cmds_text}" ]] && continue
-
-      if [[ " ${cmds_text} " == *" ${cmd} "* ]]
-      then
-        formula="${formula%\(*}"
-        formulae+=("${formula}")
-      fi
-    done <"${DATABASE_FILE}" 2>/dev/null
+      formulae+=("${formula}")
+    done < <(formulae_containing_executable "${cmd}")
 
     [[ ${#formulae[@]} -eq 0 ]] && return 1
 
@@ -126,7 +49,7 @@ homebrew-which-formula() {
       local filtered_formulae=()
       for formula in "${formulae[@]}"
       do
-        if ! is_formula_installed "${formula}"
+        if [[ ! -d "${HOMEBREW_CELLAR}/${formula}" ]]
         then
           filtered_formulae+=("${formula}")
         fi
@@ -147,7 +70,10 @@ homebrew-which-formula() {
         echo "Try: brew install <selected formula>"
       fi
     else
-      printf '%s\n' "${formulae[@]}"
+      for formula in "${formulae[@]}"
+      do
+        print_formula_install_status "${formula}"
+      done
     fi
   done
 }

@@ -5,11 +5,13 @@ require "cmd/shared_examples/args_parse"
 require "dev-cmd/typecheck"
 
 RSpec.describe Homebrew::DevCmd::Typecheck do
+  let(:klass) { Homebrew::DevCmd::Typecheck }
+
   it_behaves_like "parseable arguments"
 
   describe "#trim_rubocop_rbi" do
     let(:rbi_file) { Pathname.new("#{TEST_FIXTURE_DIR}/rubocop@x.x.x.rbi") }
-    let(:typecheck) { described_class.new([]) }
+    let(:typecheck) { klass.new([]) }
 
     before do
       allow(Dir).to receive(:glob).and_return([rbi_file.to_s])

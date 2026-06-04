@@ -9,5 +9,7 @@ cask "local-transmission" do
   desc "BitTorrent client"
   homepage "https://transmissionbt.com/"
 
+  depends_on macos: :catalina
+
   app "Transmission.app"
 end

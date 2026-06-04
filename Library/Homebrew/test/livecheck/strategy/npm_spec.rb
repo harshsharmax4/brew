@@ -4,8 +4,9 @@
 require "livecheck/strategy"
 
 RSpec.describe Homebrew::Livecheck::Strategy::Npm do
-  subject(:npm) { described_class }
+  subject(:npm) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Strategy::Npm }
   let(:npm_urls) do
     {
       typical:    "https://registry.npmjs.org/abc/-/def-1.2.3.tgz",
@@ -13,7 +14,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Npm do
     }
   end
   let(:non_npm_url) { "https://brew.sh/test" }
-
   let(:generated) do
     {
       typical:    {
@@ -24,7 +24,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Npm do
       },
     }
   end
-
   # This is a limited subset of a `latest` response object, for the sake of
   # testing.
   let(:content) do
@@ -35,7 +34,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Npm do
       }
     EOS
   end
-
   let(:matches) { ["1.2.3"] }
 
   describe "::match?" do

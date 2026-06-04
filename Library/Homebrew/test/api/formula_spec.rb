@@ -1,16 +1,18 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "api"
 require "test/support/fixtures/testball"
 
 RSpec.describe Homebrew::API::Formula do
+  let(:klass) { Homebrew::API::Formula }
   let(:cache_dir) { mktmpdir }
   let(:source_cache_dir) { mktmpdir }
 
   before do
     stub_const("Homebrew::API::HOMEBREW_CACHE_API", cache_dir)
     stub_const("Homebrew::API::HOMEBREW_CACHE_API_SOURCE", source_cache_dir)
+    Homebrew::API::Formula.clear_cache
   end
 
   def mock_curl_download(stdout:)
@@ -28,7 +30,8 @@ RSpec.describe Homebrew::API::Formula do
         [{
           "name": "foo",
           "url": "https://brew.sh/foo",
-          "aliases": ["foo-alias1", "foo-alias2"]
+          "aliases": ["foo-alias1", "foo-alias2"],
+          "executables": ["foo-bin", "food"]
         }, {
           "name": "bar",
           "url": "https://brew.sh/bar",
@@ -42,7 +45,11 @@ RSpec.describe Homebrew::API::Formula do
     end
     let(:formulae_hash) do
       {
-        "foo" => { "url" => "https://brew.sh/foo", "aliases" => ["foo-alias1", "foo-alias2"] },
+        "foo" => {
+          "url"         => "https://brew.sh/foo",
+          "aliases"     => ["foo-alias1", "foo-alias2"],
+          "executables" => ["foo-bin", "food"],
+        },
         "bar" => { "url" => "https://brew.sh/bar", "aliases" => ["bar-alias"] },
         "baz" => { "url" => "https://brew.sh/baz", "aliases" => [] },
       }
@@ -57,14 +64,65 @@ RSpec.describe Homebrew::API::Formula do
 
     it "returns the expected formula JSON list" do
       mock_curl_download stdout: formulae_json
-      formulae_output = described_class.all_formulae
+      formulae_output = klass.all_formulae
       expect(formulae_output).to eq formulae_hash
     end
 
     it "returns the expected formula alias list" do
       mock_curl_download stdout: formulae_json
-      aliases_output = described_class.all_aliases
+      aliases_output = klass.all_aliases
       expect(aliases_output).to eq formulae_aliases
+    end
+
+    it "writes formula executables from the formula JSON list" do
+      mock_curl_download stdout: formulae_json
+      Homebrew::API::Formula.write_names_and_aliases
+
+      expect((cache_dir/"internal/executables.txt").read).to eq("foo:foo-bin food\n")
+    end
+
+    it "removes the executables database if formula JSON has no executable entries" do
+      allow(Utils::Curl).to receive(:curl_download) do |*args, **kwargs|
+        raise "unexpected download URL: #{args.last}" unless args.last.end_with?("formula.jws.json")
+
+        kwargs[:to].write <<~JSON
+          [{
+            "name": "foo",
+            "url": "https://brew.sh/foo",
+            "aliases": []
+          }]
+        JSON
+      end
+      expect(Homebrew::API).not_to receive(:download_executables_file_from_github_packages!)
+      allow(Homebrew::API).to receive(:verify_and_parse_jws) do |json_data|
+        [true, json_data]
+      end
+      (cache_dir/"internal").mkpath
+      (cache_dir/"internal/executables.txt").write "foo:foo-bin\n"
+
+      Homebrew::API::Formula.write_names_and_aliases
+
+      expect(cache_dir/"internal/executables.txt").not_to exist
+    end
+
+    it "does not download the executables database while reading formula JSON" do
+      allow(Utils::Curl).to receive(:curl_download) do |*args, **kwargs|
+        raise "unexpected download URL: #{args.last}" unless args.last.end_with?("formula.jws.json")
+
+        kwargs[:to].write <<~JSON
+          [{
+            "name": "foo",
+            "url": "https://brew.sh/foo",
+            "aliases": []
+          }]
+        JSON
+      end
+      allow(Homebrew::API).to receive(:verify_and_parse_jws) do |json_data|
+        [true, json_data]
+      end
+
+      expect(Homebrew::API::Formula.all_formulae).to eq("foo" => { "url" => "https://brew.sh/foo", "aliases" => [] })
+      expect(cache_dir/"internal/executables.txt").not_to exist
     end
   end
 
@@ -85,7 +143,7 @@ RSpec.describe Homebrew::API::Formula do
       allow_any_instance_of(Homebrew::API::SourceDownload).to receive(:symlink_location).and_return(regular_file)
       expect_any_instance_of(Homebrew::API::SourceDownload).to receive(:fetch)
 
-      described_class.source_download(f)
+      klass.source_download(f)
     end
 
     it "skips download when symlink_location is a valid symlink" do
@@ -97,7 +155,7 @@ RSpec.describe Homebrew::API::Formula do
       allow_any_instance_of(Homebrew::API::SourceDownload).to receive(:symlink_location).and_return(symlink)
       expect_any_instance_of(Homebrew::API::SourceDownload).not_to receive(:fetch)
 
-      described_class.source_download(f)
+      klass.source_download(f)
     end
   end
 
@@ -118,7 +176,7 @@ RSpec.describe Homebrew::API::Formula do
       )
 
       expect do
-        described_class.source_download_formula(f)
+        klass.source_download_formula(f)
       end.to raise_error(CannotInstallFormulaError, /source code not found/)
     end
 
@@ -133,7 +191,7 @@ RSpec.describe Homebrew::API::Formula do
       allow_any_instance_of(Homebrew::API::SourceDownload).to receive(:fetch)
       allow_any_instance_of(Homebrew::API::SourceDownload).to receive(:symlink_location).and_return(source_path)
 
-      result = described_class.source_download_formula(f)
+      result = klass.source_download_formula(f)
       expect(result).to be_a(Formula)
       expect(result.name).to eq("testball")
     end
@@ -158,7 +216,7 @@ RSpec.describe Homebrew::API::Formula do
         download.symlink_location.write("patch contents")
       end
 
-      result = described_class.source_download_formula(f)
+      result = klass.source_download_formula(f)
 
       expect(result.patchlist.fetch(0).contents).to eq("patch contents")
     end

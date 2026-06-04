@@ -126,8 +126,12 @@ module Readall
     # Handle all possible exceptions reading casks.
     rescue Exception => e # rubocop:disable Lint/RescueException
       os_and_arch = "Linux"
-      os_and_arch += " on #{arch}" if arch
+      os_and_arch += " on #{(arch == :intel) ? "Intel x86_64" : "ARM64"}" if arch
       onoe "Invalid cask (#{os_and_arch}): #{file}"
+      if e.message.include?("invalid 'sha256' value: nil")
+        $stderr.puts "Missing Linux stanzas can leave Linux `sha256` as nil. " \
+                     "Add `depends_on :macos` if this cask is macOS-only."
+      end
       $stderr.puts e
       success = false
     end

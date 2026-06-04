@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/urls"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::HttpUrls do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::HttpUrls }
 
   context "when auditing HTTP URLs" do
     it "reports an offense for http:// URLs in homebrew-core" do

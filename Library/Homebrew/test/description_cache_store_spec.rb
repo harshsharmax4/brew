@@ -1,17 +1,18 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "cmd/update-report"
 require "description_cache_store"
 
 RSpec.describe DescriptionCacheStore do
-  subject(:cache_store) { described_class.new(database) }
+  subject(:cache_store) { klass.new(database) }
 
+  let(:klass) { DescriptionCacheStore }
   let(:database) { instance_double(CacheStoreDatabase, "database") }
   let(:formula_name) { "test_name" }
   let(:description) { "test_description" }
 
-  before { allow(Homebrew::EnvConfig).to receive(:eval_all?).and_return(true) }
+  before { allow(Homebrew::EnvConfig).to receive(:tap_trust_configured?).and_return(true) }
 
   describe "#update!" do
     it "sets the formula description" do
@@ -58,8 +59,9 @@ RSpec.describe DescriptionCacheStore do
   end
 
   describe CaskDescriptionCacheStore do
-    subject(:cache_store) { described_class.new(database) }
+    subject(:cache_store) { klass.new(database) }
 
+    let(:klass) { CaskDescriptionCacheStore }
     let(:database) { instance_double(CacheStoreDatabase, "database") }
 
     describe "#update_from_report!" do

@@ -174,67 +174,86 @@ module Homebrew
 
       sig { params(_block: T.proc.void).returns(T.untyped) }
       def with_monkey_patch(&_block)
-        # Since `method_defined?` is not a supported type guard, the use of `alias_method` below is not typesafe:
+        DependencyCollector.clear_cache
+
         BottleSpecification.class_eval do
-          T.unsafe(self).alias_method :old_method_missing, :method_missing if method_defined?(:method_missing)
+          if method_defined?(:method_missing) || private_method_defined?(:method_missing)
+            send(:alias_method, :old_method_missing, :method_missing)
+            send(:private, :old_method_missing)
+          end
           define_method(:method_missing) do |*_|
             # do nothing
           end
+          send(:private, :method_missing)
         end
 
         Module.class_eval do
-          T.unsafe(self).alias_method :old_method_missing, :method_missing if method_defined?(:method_missing)
+          if method_defined?(:method_missing) || private_method_defined?(:method_missing)
+            send(:alias_method, :old_method_missing, :method_missing)
+            send(:private, :old_method_missing)
+          end
           define_method(:method_missing) do |*_|
             # do nothing
           end
+          send(:private, :method_missing)
         end
 
         Resource.class_eval do
-          T.unsafe(self).alias_method :old_method_missing, :method_missing if method_defined?(:method_missing)
+          if method_defined?(:method_missing) || private_method_defined?(:method_missing)
+            send(:alias_method, :old_method_missing, :method_missing)
+            send(:private, :old_method_missing)
+          end
           define_method(:method_missing) do |*_|
             # do nothing
           end
+          send(:private, :method_missing)
         end
 
         DependencyCollector.class_eval do
-          if method_defined?(:parse_symbol_spec)
-            T.unsafe(self).alias_method :old_parse_symbol_spec,
-                                        :parse_symbol_spec
+          if method_defined?(:parse_symbol_spec) || private_method_defined?(:parse_symbol_spec)
+            send(:alias_method, :old_parse_symbol_spec, :parse_symbol_spec)
+            send(:private, :old_parse_symbol_spec)
           end
           define_method(:parse_symbol_spec) do |*_|
             # do nothing
           end
+          send(:private, :parse_symbol_spec)
         end
 
         yield
       ensure
         BottleSpecification.class_eval do
-          if method_defined?(:old_method_missing)
-            T.unsafe(self).alias_method :method_missing, :old_method_missing
-            T.unsafe(self).undef :old_method_missing
+          if method_defined?(:old_method_missing) || private_method_defined?(:old_method_missing)
+            send(:alias_method, :method_missing, :old_method_missing)
+            send(:private, :method_missing)
+            send(:undef_method, :old_method_missing)
           end
         end
 
         Module.class_eval do
-          if method_defined?(:old_method_missing)
-            T.unsafe(self).alias_method :method_missing, :old_method_missing
-            T.unsafe(self).undef :old_method_missing
+          if method_defined?(:old_method_missing) || private_method_defined?(:old_method_missing)
+            send(:alias_method, :method_missing, :old_method_missing)
+            send(:private, :method_missing)
+            send(:undef_method, :old_method_missing)
           end
         end
 
         Resource.class_eval do
-          if method_defined?(:old_method_missing)
-            T.unsafe(self).alias_method :method_missing, :old_method_missing
-            T.unsafe(self).undef :old_method_missing
+          if method_defined?(:old_method_missing) || private_method_defined?(:old_method_missing)
+            send(:alias_method, :method_missing, :old_method_missing)
+            send(:private, :method_missing)
+            send(:undef_method, :old_method_missing)
           end
         end
 
         DependencyCollector.class_eval do
-          if method_defined?(:old_parse_symbol_spec)
-            T.unsafe(self).alias_method :parse_symbol_spec, :old_parse_symbol_spec
-            T.unsafe(self).undef :old_parse_symbol_spec
+          if method_defined?(:old_parse_symbol_spec) || private_method_defined?(:old_parse_symbol_spec)
+            send(:alias_method, :parse_symbol_spec, :old_parse_symbol_spec)
+            send(:private, :parse_symbol_spec)
+            send(:undef_method, :old_parse_symbol_spec)
           end
         end
+        DependencyCollector.clear_cache
       end
     end
   end

@@ -4,8 +4,9 @@
 require "livecheck/strategy"
 
 RSpec.describe Homebrew::Livecheck::Strategy::Cpan do
-  subject(:cpan) { described_class }
+  subject(:cpan) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Strategy::Cpan }
   let(:cpan_urls) do
     {
       no_subdirectory:       "https://cpan.metacpan.org/authors/id/H/HO/HOMEBREW/Brew-v1.2.3.tar.gz",
@@ -15,7 +16,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Cpan do
     }
   end
   let(:non_cpan_url) { "https://brew.sh/test" }
-
   let(:generated) do
     {
       no_subdirectory:   {
@@ -28,7 +28,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Cpan do
       },
     }
   end
-
   # CPAN doesn't specify a DOCTYPE, so it's also omitted here.
   let(:content) do
     <<~EOS
@@ -58,7 +57,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Cpan do
 
     EOS
   end
-
   let(:matches) { ["1.2.3", "1.2.2", "1.2.1"] }
 
   describe "::match?" do

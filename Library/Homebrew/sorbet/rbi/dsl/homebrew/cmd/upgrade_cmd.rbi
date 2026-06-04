@@ -14,6 +14,9 @@ class Homebrew::Cmd::UpgradeCmd::Args < Homebrew::CLI::Args
   sig { returns(T.nilable(String)) }
   def appdir; end
 
+  sig { returns(T.nilable(String)) }
+  def appimagedir; end
+
   sig { returns(T::Boolean) }
   def ask?; end
 
@@ -104,8 +107,17 @@ class Homebrew::Cmd::UpgradeCmd::Args < Homebrew::CLI::Args
   sig { returns(T.nilable(String)) }
   def mdimporterdir; end
 
+  sig { returns(T.nilable(String)) }
+  def min_version; end
+
+  sig { returns(T.nilable(String)) }
+  def minimum_version; end
+
   sig { returns(T::Boolean) }
   def n?; end
+
+  sig { returns(T::Boolean) }
+  def no_quit?; end
 
   sig { returns(T::Boolean) }
   def overwrite?; end

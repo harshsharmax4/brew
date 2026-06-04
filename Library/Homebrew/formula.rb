@@ -38,10 +38,12 @@ require "language/python"
 require "tab"
 require "mktemp"
 require "find"
+require "install_steps"
 require "utils/spdx"
 require "on_system"
 require "api"
 require "api_hashable"
+require "trust"
 require "utils/output"
 require "pypi_packages"
 require "time"
@@ -344,15 +346,22 @@ class Formula
 
   # Ensure the given formula is installed.
   # This is useful for installing a utility formula (e.g. `shellcheck` for `brew style`).
+  # When `executable` is provided, a matching system executable in `ORIGINAL_PATHS`
+  # can satisfy the request without installing the formula. When `latest` is true,
+  # the system executable's version is checked with `version_args` first.
+  # Returns the executable path if `executable` is provided, otherwise the formula.
   sig {
     params(
       reason:           String,
       latest:           T::Boolean,
       output_to_stderr: T::Boolean,
       quiet:            T::Boolean,
-    ).returns(T.self_type)
+      executable:       T.nilable(String),
+      version_args:     T::Array[String],
+    ).returns(T.any(T.self_type, Pathname))
   }
-  def ensure_installed!(reason: "", latest: false, output_to_stderr: true, quiet: false)
+  def ensure_installed!(reason: "", latest: false, output_to_stderr: true, quiet: false, executable: nil,
+                        version_args: ["--version"])
     if output_to_stderr || quiet
       file = if quiet
         File::NULL
@@ -361,8 +370,16 @@ class Formula
       end
       # Call this method itself with redirected stdout
       redirect_stdout(file) do
-        return ensure_installed!(latest:, reason:, output_to_stderr: false)
+        return ensure_installed!(latest:, reason:, output_to_stderr: false, executable:, version_args:)
       end
+    end
+
+    if executable && (system_executable = which(executable, ORIGINAL_PATHS))
+      return system_executable unless latest
+
+      require "system_command"
+      result = SystemCommand.run(system_executable, args: version_args, print_stderr: false)
+      return system_executable if result.success? && result.stdout[/\d+(?:\.\d+)+/] == version.to_s
     end
 
     reason = " for #{reason}" if reason.present?
@@ -377,7 +394,7 @@ class Formula
       safe_system HOMEBREW_BREW_FILE, "upgrade", "--formula", full_name
     end
 
-    self
+    executable ? opt_bin/executable : self
   end
 
   sig { returns(T::Boolean) }
@@ -620,6 +637,11 @@ class Formula
   # @!method api_source
   # @see .api_source
   delegate api_source: :"self.class"
+
+  # The post-install steps.
+  # @!method post_install_steps
+  # @see .post_install_steps
+  delegate post_install_steps: :"self.class"
 
   sig { void }
   def update_head_version
@@ -1580,14 +1602,44 @@ class Formula
     method(:post_install).owner != Formula
   end
 
+  sig { returns(T::Boolean) }
+  def post_install_steps_defined? = self.class.post_install_steps_defined?
+
+  sig { returns(T::Boolean) }
+  def post_install_steps_conflict?
+    post_install_steps_defined? && post_install_defined?
+  end
+
+  sig { void }
+  def warn_on_post_install_steps_conflict
+    opoo "#{full_name}: `post_install` is ignored because `post_install_steps` are defined!"
+  end
+
   sig { void }
   def install_etc_var
     etc_var_dirs = [bottle_prefix/"etc", bottle_prefix/"var"]
     Find.find(*etc_var_dirs.select(&:directory?)) do |path|
       path = Pathname.new(path)
+      # Bottle installs and test-bot cleanup both restore `.bottle` files
+      # through `InstallRenamed`, matching formula-level `etc.install` handling.
       path.extend(InstallRenamed)
       path.cp_path_sub(bottle_prefix, HOMEBREW_PREFIX)
       path
+    end
+  end
+
+  sig { void }
+  def run_post_install_steps
+    return if post_install_steps.empty?
+
+    @prefix_returns_versioned_prefix = T.let(true, T.nilable(T::Boolean))
+
+    begin
+      with_logging("post_install_steps") do
+        Homebrew::InstallSteps::Runner.new(context: self).run(post_install_steps)
+      end
+    ensure
+      @prefix_returns_versioned_prefix = T.let(false, T.nilable(T::Boolean))
     end
   end
 
@@ -1608,12 +1660,18 @@ class Formula
         PATH:          PATH.new(ORIGINAL_PATHS),
       }
 
-      with_env(new_env) do
-        ENV.clear_sensitive_environment!
-        ENV.activate_extensions!
+      Dir.mktmpdir("#{name}-postinstall-") do |home|
+        postinstall_home = Pathname(home)
+        new_env[:HOME] = postinstall_home.to_s
+        setup_home postinstall_home
 
-        with_logging("post_install") do
-          post_install
+        with_env(new_env) do
+          ENV.clear_sensitive_environment!
+          ENV.activate_extensions!
+
+          with_logging("post_install") do
+            post_install
+          end
         end
       end
     ensure
@@ -2503,14 +2561,18 @@ class Formula
   end
 
   # An array of each known {Formula}.
-  # Can only be used when users specify `--eval-all` with a command or set `HOMEBREW_EVAL_ALL=1`.
+  # Can only be used when users set `HOMEBREW_REQUIRE_TAP_TRUST=1` or `HOMEBREW_NO_REQUIRE_TAP_TRUST=1`.
   sig { params(eval_all: T::Boolean).returns(T::Array[Formula]) }
   def self.all(eval_all: false)
-    if !eval_all && !Homebrew::EnvConfig.eval_all?
-      raise ArgumentError, "Formula#all cannot be used without `--eval-all` or `HOMEBREW_EVAL_ALL=1`"
+    if !eval_all && !Homebrew::EnvConfig.tap_trust_configured?
+      raise ArgumentError,
+            "Formula#all cannot be used without `HOMEBREW_REQUIRE_TAP_TRUST=1` or " \
+            "`HOMEBREW_NO_REQUIRE_TAP_TRUST=1`"
     end
 
-    (core_names + tap_files).filter_map do |name_or_file|
+    trusted_tap_files = Homebrew::Trust.trusted_formula_files(tap_files)
+
+    (core_names + trusted_tap_files).filter_map do |name_or_file|
       Formulary.factory(name_or_file)
     rescue FormulaUnavailableError, FormulaUnreadableError, FormulaSpecificationError => e
       # Don't let one broken formula break commands. But do complain.
@@ -2624,17 +2686,14 @@ class Formula
 
   sig { returns(T::Boolean) }
   def supports_macos?
-    return false if active_spec.depends_on_linux_set_top_level
-
-    requirements.none?(LinuxRequirement)
+    !active_spec.depends_on_linux_set_top_level?
   end
 
   sig { returns(T::Boolean) }
   def supports_linux?
-    return true if active_spec.depends_on_linux_set_top_level
-    return false if active_spec.depends_on_macos_set_top_level?
+    return true if active_spec.depends_on_linux_set_top_level?
 
-    requirements.none? { |r| r.is_a?(MacOSRequirement) && !r.version_specified? }
+    !active_spec.depends_on_macos_set_top_level?
   end
 
   sig { params(options: T::Hash[Symbol, String]).void }
@@ -2883,6 +2942,7 @@ class Formula
         "bottle" => bottle_defined?,
       },
       "urls"                            => urls_hash,
+      "patches"                         => serialized_patches,
       "revision"                        => revision,
       "version_scheme"                  => version_scheme,
       "compatibility_version"           => compatibility_version,
@@ -2922,6 +2982,7 @@ class Formula
       "disable_replacement_formula"     => disable_replacement_formula,
       "disable_replacement_cask"        => disable_replacement_cask,
       "disable_args"                    => disable_args,
+      "post_install_steps"              => post_install_steps,
       "post_install_defined"            => post_install_defined?,
       "service"                         => (service.to_hash if service?),
       "tap_git_head"                    => tap_git_head,
@@ -3061,6 +3122,25 @@ class Formula
   end
 
   sig { returns(T::Array[T::Hash[String, T.untyped]]) }
+  def serialized_patches
+    patchlist.map do |p|
+      h = { "strip" => p.strip.to_s }
+      if p.external?
+        external = T.cast(p, ExternalPatch)
+        h["url"] = external.url
+        h["sha256"] = external.resource.checksum&.hexdigest
+        h["apply"] = external.resource.patch_files.map(&:to_s) if external.resource.patch_files.any?
+        h["directory"] = external.resource.directory.to_s if external.resource.directory.present?
+      elsif p.is_a?(LocalPatch)
+        h["file"] = p.file.to_s
+      else
+        h["data"] = true
+      end
+      h
+    end
+  end
+
+  sig { returns(T::Array[T::Hash[String, T.untyped]]) }
   def serialized_requirements
     requirements = self.class.spec_syms.to_h do |sym|
       [sym, send(sym)&.requirements]
@@ -3196,8 +3276,7 @@ class Formula
       PATH:          PATH.new(ENV.fetch("PATH"), HOMEBREW_PREFIX/"bin"),
       HOMEBREW_TERM: ENV.fetch("TERM", nil),
       HOMEBREW_PATH: nil,
-    }.merge(common_stage_test_env)
-    test_env[:_JAVA_OPTIONS] += " -Djava.io.tmpdir=#{HOMEBREW_TEMP}"
+    }
 
     ENV.clear_sensitive_environment!
     Utils::Git.set_name_email!
@@ -3206,6 +3285,8 @@ class Formula
       staging.retain! if keep_tmp
       @testpath = T.let(staging.tmpdir, T.nilable(Pathname))
       test_env[:HOME] = @testpath
+      test_env.merge!(common_stage_test_env(T.must(@testpath)))
+      test_env[:_JAVA_OPTIONS] += " -Djava.io.tmpdir=#{HOMEBREW_TEMP}"
       setup_home T.must(@testpath)
       begin
         with_logging("test") do
@@ -3657,15 +3738,15 @@ class Formula
   end
 
   # Common environment variables used at both build and test time.
-  sig { returns(T::Hash[Symbol, String]) }
-  def common_stage_test_env
+  sig { params(home: Pathname).returns(T::Hash[Symbol, String]) }
+  def common_stage_test_env(home)
     {
       _JAVA_OPTIONS:           "-Duser.home=#{HOMEBREW_CACHE}/java_cache",
       GOCACHE:                 "#{HOMEBREW_CACHE}/go_cache",
       GOPATH:                  "#{HOMEBREW_CACHE}/go_mod_cache",
       CARGO_HOME:              "#{HOMEBREW_CACHE}/cargo_cache",
       PIP_CACHE_DIR:           "#{HOMEBREW_CACHE}/pip_cache",
-      CURL_HOME:               ENV.fetch("CURL_HOME") { Dir.home },
+      CURL_HOME:               ENV.fetch("CURL_HOME") { home.to_s },
       PYTHONDONTWRITEBYTECODE: "1",
     }
   end
@@ -3684,7 +3765,7 @@ class Formula
 
       unless interactive
         stage_env[:HOME] = env_home
-        stage_env.merge!(common_stage_test_env)
+        stage_env.merge!(common_stage_test_env(env_home))
       end
 
       setup_home env_home
@@ -3721,6 +3802,8 @@ class Formula
         @conflicts = T.let([], T.nilable(T::Array[FormulaConflict]))
         @skip_clean_paths = T.let(Set.new, T.nilable(T::Set[T.any(String, Symbol)]))
         @link_overwrite_paths = T.let(Set.new, T.nilable(T::Set[String]))
+        @post_install_steps = T.let([], T.nilable(Homebrew::InstallSteps::Steps))
+        @post_install_steps_defined = T.let(false, T.nilable(T::Boolean))
         @loaded_from_api = T.let(false, T.nilable(T::Boolean))
         @loaded_from_internal_api = T.let(false, T.nilable(T::Boolean))
         @api_source = T.let(nil, T.nilable(T::Hash[String, T.untyped]))
@@ -3740,6 +3823,7 @@ class Formula
       @conflicts.freeze
       @skip_clean_paths.freeze
       @link_overwrite_paths.freeze
+      @post_install_steps.freeze
       @preserve_rpath&.freeze
       super
     end
@@ -3919,6 +4003,40 @@ class Formula
 
       env_var = Homebrew::EnvConfig.send(:"formula_#{phase}_network")
       env_var.nil? ? network_access_allowed[phase] : env_var == "allow"
+    end
+
+    sig { returns(T::Boolean) }
+    def post_install_steps_defined? = @post_install_steps_defined == true
+
+    # Declarative steps to run after bottle installation.
+    #
+    # ### Example
+    #
+    # ```ruby
+    # post_install_steps do
+    #   mkdir "log/foo", base: :var
+    # end
+    # ```
+    #
+    # @api public
+    sig { params(steps: T.untyped, block: T.nilable(T.proc.void)).returns(Homebrew::InstallSteps::Steps) }
+    def post_install_steps(*steps, &block)
+      current_steps = @post_install_steps || []
+      return current_steps if steps.empty? && block.nil?
+
+      @post_install_steps_defined = T.let(true, T.nilable(T::Boolean))
+      current_steps.concat(
+        if block
+          Homebrew::InstallSteps::DSL.build(
+            default_base:        :var,
+            default_source_base: :prefix,
+            default_target_base: :prefix,
+            &block
+          )
+        else
+          Homebrew::InstallSteps::DSL.normalise_steps(steps)
+        end,
+      )
     end
 
     # The homepage for the software. Used by users to get more information

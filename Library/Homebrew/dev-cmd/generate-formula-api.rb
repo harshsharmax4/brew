@@ -2,6 +2,8 @@
 # frozen_string_literal: true
 
 require "abstract_command"
+require "api"
+require "executables_db"
 require "fileutils"
 require "formula"
 
@@ -37,6 +39,15 @@ module Homebrew
           FileUtils.mkdir_p directories
         end
 
+        executables_path = Pathname("api/internal/executables.txt")
+        # Use the existing executables database as the API generation source.
+        # It is generated from GitHub Packages metadata, not generated API JSON.
+        if !args.dry_run? &&
+           !Homebrew::API.download_executables_file_from_github_packages!(executables_path)
+          odie "Failed to download #{executables_path}"
+        end
+        executables = ExecutablesDB.new(executables_path.to_s).to_hash
+
         Homebrew.with_no_api_env do
           tap_migrations_json = JSON.dump(tap.tap_migrations)
           File.write("api/formula_tap_migrations.json", tap_migrations_json) unless args.dry_run?
@@ -51,6 +62,7 @@ module Homebrew
               formula = Formulary.factory(name)
               name = formula.name
               all_formulae[name] = formula.to_hash_with_variations
+              all_formulae[name]["executables"] = executables[name] if executables.key?(name)
               json = JSON.pretty_generate(all_formulae[name])
               html_template_name = html_template(name)
 

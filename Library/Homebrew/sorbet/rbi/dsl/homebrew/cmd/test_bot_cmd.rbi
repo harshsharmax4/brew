@@ -33,6 +33,9 @@ class Homebrew::Cmd::TestBotCmd::Args < Homebrew::CLI::Args
   def fail_fast?; end
 
   sig { returns(T.nilable(String)) }
+  def formulae_dependents_shard; end
+
+  sig { returns(T.nilable(String)) }
   def git_email; end
 
   sig { returns(T.nilable(String)) }

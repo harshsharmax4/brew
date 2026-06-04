@@ -1,14 +1,20 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "utils/user"
 
 RSpec.describe User do
-  subject(:user) { described_class.current }
+  subject(:user) { klass.current }
+
+  let(:klass) { User }
 
   it { is_expected.to eq ENV.fetch("USER") }
 
   describe "#gui?" do
+    # Required for Sorbet, but the actual value is set in the individual
+    # examples which provide their `let(:who_output)` value to `before`.
+    let(:who_output) { "" }
+
     before do
       allow(SystemCommand).to receive(:run)
         .with("who", any_args)

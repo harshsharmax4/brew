@@ -166,6 +166,34 @@ module Utils
       (args + extra_args).map(&:to_s)
     end
 
+    sig { params(url: String, resolved_url: String).returns(T::Boolean) }
+    def insecure_redirect?(url:, resolved_url:)
+      Homebrew::EnvConfig.no_insecure_redirect? &&
+        url.start_with?("https://") && !resolved_url.start_with?("https://")
+    end
+
+    sig { params(args: T::Array[String]).returns(T::Array[String]) }
+    def no_insecure_redirect_curl_args(args)
+      return args unless Homebrew::EnvConfig.no_insecure_redirect?
+
+      # `--proto-redir =https` tells `curl --location` to reject any redirect
+      # target that is not HTTPS. Drop caller-provided values first so they
+      # cannot relax the HTTPS-only redirect policy.
+      args = args.each_with_index.filter_map do |arg, i|
+        next if arg == "--proto-redir"
+        next if i.positive? && args.fetch(i - 1) == "--proto-redir"
+        next if arg.start_with?("--proto-redir=")
+
+        arg
+      end
+      return args unless args.include?("--location")
+
+      # This blocks an HTTPS request from following a redirect to HTTP at the
+      # curl layer, including cases where a preflight request saw a different
+      # redirect chain than the real download.
+      ["--proto-redir", "=https", *args]
+    end
+
     sig {
       params(
         args:              String,
@@ -185,6 +213,7 @@ module Utils
       secrets: [], print_stdout: false, print_stderr: false, debug: nil,
       verbose: nil, env: {}, timeout: nil, use_homebrew_curl: false, **options
     )
+      args = no_insecure_redirect_curl_args(args)
       end_time = Time.now + timeout if timeout
 
       command_options = {
@@ -461,8 +490,7 @@ module Utils
         end
       end
 
-      if url.start_with?("https://") && Homebrew::EnvConfig.no_insecure_redirect? &&
-         details[:final_url].present? && !details[:final_url].start_with?("https://")
+      if details[:final_url].present? && insecure_redirect?(url:, resolved_url: details[:final_url])
         return "The #{url_type} #{url} redirects back to HTTP"
       end
 

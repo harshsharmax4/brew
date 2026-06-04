@@ -175,6 +175,7 @@ module Homebrew
           )
 
           hash["stable_dependencies"] = stable_dependencies
+          hash["stable_patches"] = hash["patches"] || []
           hash["stable_uses_from_macos"] = stable_uses_from_macos
           hash["head_dependencies"] = head_dependencies
           hash["head_uses_from_macos"] = head_uses_from_macos
@@ -223,8 +224,11 @@ module Homebrew
           hash = hash.dup
 
           if (uses_from_macos_bounds = hash["uses_from_macos_bounds"])
-            uses_from_macos_bounds = T.cast(uses_from_macos_bounds, T::Array[T::Hash[Symbol, Symbol]])
-            hash["uses_from_macos_bounds"] = uses_from_macos_bounds.map(&:deep_symbolize_keys)
+            uses_from_macos_bounds =
+              T.cast(uses_from_macos_bounds, T::Array[T::Hash[T.any(String, Symbol), T.any(String, Symbol)]])
+            hash["uses_from_macos_bounds"] = uses_from_macos_bounds.map do |bound|
+              bound.to_h { |key, value| [key.to_sym, value.to_sym] }
+            end
           end
 
           hash.transform_values do |deps|

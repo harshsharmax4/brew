@@ -569,7 +569,8 @@ module RuboCop
           install = find_method_def(formula_nodes.body_node, :install)
           return if install.blank?
 
-          correctable_shell_completion_node(install) do |node, shell, base_name, executable, subcmd, shell_parameter|
+          correctable_shell_completion_node(install) do |node, shell, base_name, executable, subcommand,
+                                                        shell_parameter|
             # generate_completions_from_executable only applicable if shell is passed
             next unless shell_parameter.match?(/(bash|zsh|fish|pwsh)/)
 
@@ -592,7 +593,7 @@ module RuboCop
 
             replacement_args = %w[]
             replacement_args << executable.source
-            replacement_args << subcmd.source
+            replacement_args << subcommand.source
             replacement_args << "base_name: \"#{base_name}\"" if base_name != @formula_name
             replacement_args << "shells: [:#{shell}]"
             unless shell_parameter_format.nil?
@@ -616,7 +617,8 @@ module RuboCop
           end
         end
 
-        # match ({bash,zsh,fish}_completion/"_?foo{.fish}?").write Utils.safe_popen_read(foo, subcmd, shell_parameter)
+        # match ({bash,zsh,fish}_completion/"_?foo{.fish}?").write
+        # Utils.safe_popen_read(foo, subcommand, shell_parameter)
         def_node_search :correctable_shell_completion_node, <<~EOS
           $(send
           (begin
@@ -660,7 +662,10 @@ module RuboCop
           methods.each do |method|
             next unless method.source.include?("shells:")
 
-            shells << method.source.match(/shells: \[(:bash|:zsh|:fish)\]/).captures.first
+            shell = method.source[/shells: \[(:bash|:zsh|:fish)\]/, 1]
+            next if shell.nil?
+
+            shells << shell
             offenses << method
           end
 

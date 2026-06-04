@@ -1,9 +1,10 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 RSpec.describe ErrorDuringExecution do
-  subject(:error) { described_class.new(command, status:, output:) }
+  subject(:error) { klass.new(command, status:, output:) }
 
+  let(:klass) { ErrorDuringExecution }
   let(:command) { ["false"] }
   let(:status) { instance_double(Process::Status, exitstatus:, termsig: nil) }
   let(:exitstatus) { 1 }
@@ -12,19 +13,19 @@ RSpec.describe ErrorDuringExecution do
   describe "#initialize" do
     it "fails when only given a command" do
       expect do
-        described_class.new(command)
+        klass.new(command)
       end.to raise_error(ArgumentError)
     end
 
     it "fails when only given a status" do
       expect do
-        described_class.new(status:)
+        klass.new(status:)
       end.to raise_error(ArgumentError)
     end
 
     it "does not raise an error when given both a command and a status" do
       expect do
-        described_class.new(command, status:)
+        klass.new(command, status:)
       end.not_to raise_error
     end
   end

@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/files"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::Files do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::Files }
 
   context "when auditing files" do
     it "reports an offense when the permissions are invalid" do

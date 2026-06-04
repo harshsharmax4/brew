@@ -127,18 +127,38 @@ class Caveats
 
   sig { returns(T.nilable(String)) }
   def shadowed_path_text
-    return if formula.keg_only? && !formula.linked?
     return if Homebrew::EnvConfig.no_path_shadow_check?
+    return unless formula.any_version_installed?
 
     shadowed = shadowed_executables
+    shadowed = shadowed.select { |_, shadower| sibling_keg_name(shadower) } if formula.keg_only? && !formula.linked?
     return if shadowed.empty?
 
-    lines = shadowed.sort_by(&:first).map { |name, shadower| "  #{name} (shadowed by #{shadower})" }
-    s = <<~EOS
-      The following #{formula.name} executables are shadowed by other commands earlier in your PATH:
-      #{lines.join("\n")}
-      Running these by name will not invoke the version provided by Homebrew.
-    EOS
+    sibling, external = shadowed.sort_by(&:first).partition { |_, shadower| sibling_keg_name(shadower) }
+    blocks = []
+
+    if external.any?
+      lines = external.map { |name, shadower| "  #{name} (shadowed by #{shadower})" }
+      blocks << <<~EOS
+        The following #{formula.name} executables are shadowed by other commands earlier in your PATH:
+        #{lines.join("\n")}
+        Running these by name will not invoke the version provided by Homebrew.
+      EOS
+    end
+
+    if sibling.any?
+      lines = sibling.map do |name, shadower|
+        "  #{name} (shadowed by #{shadower} from #{sibling_keg_name(shadower)})"
+      end
+      blocks << <<~EOS
+        The following #{formula.name} executables are shadowed by other linked Homebrew commands:
+        #{lines.join("\n")}
+        Running these by name will not invoke the version provided by this formula.
+        Run `brew link #{formula.name}` to switch the active version to this keg.
+      EOS
+    end
+
+    s = blocks.join("\n").dup
     unless Homebrew::EnvConfig.no_env_hints?
       s << "Disable this behaviour by setting `HOMEBREW_NO_PATH_SHADOW_CHECK=1`.\n"
       s << "Hide these hints with `HOMEBREW_NO_ENV_HINTS=1` (see `man brew`).\n"
@@ -147,6 +167,24 @@ class Caveats
   end
 
   private
+
+  sig { params(shadower: Pathname).returns(T.nilable(String)) }
+  def sibling_keg_name(shadower)
+    target = shadower.realpath
+    return unless target.to_s.start_with?("#{HOMEBREW_CELLAR.realpath}/")
+
+    name = target.relative_path_from(HOMEBREW_CELLAR.realpath).each_filename.first
+    return if name.nil? || name == formula.name
+
+    family = [
+      formula.unversioned_formula_name,
+      formula.name,
+      *formula.versioned_formulae_names,
+    ].compact
+    name if family.include?(name)
+  rescue Errno::ENOENT
+    nil
+  end
 
   sig { returns(T::Array[[String, Pathname]]) }
   def shadowed_executables

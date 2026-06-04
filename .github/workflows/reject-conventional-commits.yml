@@ -1,0 +1,39 @@
+name: Commit Style
+
+on:
+  pull_request:
+    branches: ["**"]
+
+permissions: {}
+
+jobs:
+  reject-conventional-commits:
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 25
+          persist-credentials: false
+
+      - name: Check commit titles
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pattern='^(feat|fix|chore|refactor|perf|ci)(\([^)]*\))?!?:'
+          violations=()
+          while IFS= read -r title; do
+            if [[ "$title" =~ $pattern ]]; then
+              violations+=("$title")
+            fi
+          done < <(git log --format=%s "${BASE_SHA}..${HEAD_SHA}")
+          if (( ${#violations[@]} > 0 )); then
+            echo "Conventional commit prefixes are not allowed. Found:"
+            printf '  - %s\n' "${violations[@]}"
+            exit 1
+          fi
+          echo "OK — no conventional commit prefixes found."

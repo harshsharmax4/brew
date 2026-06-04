@@ -1,0 +1,11 @@
+---
+name: elftools
+version: 1.3.1
+type: bundler
+summary: ELFTools - Pure ruby library for parsing and patching ELF files
+homepage: https://github.com/david942j/rbelftools
+license: mit
+licenses:
+- sources: README.md
+  text: MIT License
+notices: []

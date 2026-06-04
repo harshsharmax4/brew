@@ -16,6 +16,7 @@ module Cask
     DEFAULT_DIRS = T.let(
       {
         appdir:               "/Applications",
+        appimagedir:          "~/Applications",
         keyboard_layoutdir:   "/Library/Keyboard Layouts",
         colorpickerdir:       "~/Library/ColorPickers",
         prefpanedir:          "~/Library/PreferencePanes",
@@ -49,6 +50,7 @@ module Cask
       args = T.unsafe(args)
       new(explicit: {
         appdir:               args.appdir,
+        appimagedir:          args.appimagedir,
         keyboard_layoutdir:   args.keyboard_layoutdir,
         colorpickerdir:       args.colorpickerdir,
         prefpanedir:          args.prefpanedir,
@@ -79,7 +81,8 @@ module Cask
       )
     end
 
-    sig { params(config: ConfigHash).returns(ConfigHash) }
+    # runtime recursive evaluation forces the LazyObject to be evaluated
+    T::Sig::WithoutRuntime.sig { params(config: ConfigHash).returns(ConfigHash) }
     def self.canonicalize(config)
       config.to_h do |k, v|
         if DEFAULT_DIRS.key?(k)
@@ -134,7 +137,8 @@ module Cask
       @explicit.assert_valid_keys(*self.class.defaults.keys)
     end
 
-    sig { returns(ConfigHash) }
+    # runtime recursive evaluation forces the LazyObject to be evaluated
+    T::Sig::WithoutRuntime.sig { returns(ConfigHash) }
     def default
       @default ||= self.class.canonicalize(self.class.defaults)
     end

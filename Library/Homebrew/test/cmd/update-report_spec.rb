@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "cmd/update-report"
@@ -8,14 +8,18 @@ require "cmd/shared_examples/args_parse"
 require "cmd/shared_examples/reinstall_pkgconf_if_needed"
 
 RSpec.describe Homebrew::Cmd::UpdateReport do
+  let(:klass) { Homebrew::Cmd::UpdateReport }
+
   it_behaves_like "parseable arguments"
 
   it_behaves_like "reinstall_pkgconf_if_needed"
 
   describe Reporter do
+    let(:klass) { Reporter }
+
     let(:tap) { CoreTap.instance }
     let(:reporter_class) do
-      Class.new(described_class) do
+      Class.new(klass) do
         def initialize(tap)
           @tap = tap
 
@@ -43,7 +47,7 @@ RSpec.describe Homebrew::Cmd::UpdateReport do
       ENV.delete_if { |k, _v| k.start_with? "HOMEBREW_UPDATE" }
 
       expect do
-        described_class.new(tap)
+        klass.new(tap)
       end.to raise_error(Reporter::ReporterRevisionUnsetError)
     end
 
@@ -157,10 +161,10 @@ RSpec.describe Homebrew::Cmd::UpdateReport do
     describe "#diff" do
       context "when using the API" do
         subject(:reporter) do
-          described_class.new(tap,
-                              api_names_txt:        Pathname("formula_names.txt"),
-                              api_names_before_txt: Pathname("formula_names_before.txt"),
-                              api_dir_prefix:       HOMEBREW_CACHE/"api")
+          klass.new(tap,
+                    api_names_txt:        Pathname("formula_names.txt"),
+                    api_names_before_txt: Pathname("formula_names_before.txt"),
+                    api_dir_prefix:       HOMEBREW_CACHE/"api")
         end
 
         it "ignore lines that haven't changed" do
@@ -195,7 +199,9 @@ RSpec.describe Homebrew::Cmd::UpdateReport do
   end
 
   describe ReporterHub do
-    let(:hub) { described_class.new }
+    let(:klass) { ReporterHub }
+
+    let(:hub) { klass.new }
 
     before do
       ENV["HOMEBREW_NO_COLOR"] = "1"

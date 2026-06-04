@@ -20,7 +20,10 @@ module Homebrew
         args.named.to_resolved_formulae.each do |f|
           ohai "Postinstalling #{f}"
           f.install_etc_var
-          if f.post_install_defined?
+          if f.post_install_steps_defined?
+            f.warn_on_post_install_steps_conflict if f.post_install_steps_conflict? && !args.quiet?
+            f.run_post_install_steps
+          elsif f.post_install_defined?
             fi = FormulaInstaller.new(f, **{ debug: args.debug?, quiet: args.quiet?, verbose: args.verbose? }.compact)
             fi.post_install
           else

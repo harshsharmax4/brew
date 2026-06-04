@@ -11,5 +11,5 @@ cask "with-uninstall-both-on-upgrade" do
 
   uninstall quit:       "my.fancy.package.app",
             signal:     [["TERM", "my.fancy.package.app"]],
-            on_upgrade: [:quit, :signal]
+            on_upgrade: :signal
 end

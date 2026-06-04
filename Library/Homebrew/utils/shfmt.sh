@@ -16,9 +16,10 @@ then
   odie "${0##*/}: This program is internal and must be run via brew."
 fi
 
+# HOMEBREW_SHFMT is set by style.rb to the selected shfmt executable.
 # HOMEBREW_PREFIX is set by extend/ENV/super.rb
 # shellcheck disable=SC2154
-SHFMT="${HOMEBREW_PREFIX}/opt/shfmt/bin/shfmt"
+SHFMT="${HOMEBREW_SHFMT:-${HOMEBREW_PREFIX}/opt/shfmt/bin/shfmt}"
 if [[ ! -x "${SHFMT}" ]]
 then
   odie "${0##*/}: Please install shfmt by running \`brew install shfmt\`."

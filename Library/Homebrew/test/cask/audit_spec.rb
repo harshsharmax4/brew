@@ -4,6 +4,23 @@
 require "cask/audit"
 
 RSpec.describe Cask::Audit, :cask do
+  let(:klass) { Cask::Audit }
+  let(:cask) { instance_double(Cask::Cask) }
+  let(:new_cask) { nil }
+  let(:online) { nil }
+  let(:only) { [] }
+  let(:except) { [] }
+  let(:strict) { nil }
+  let(:signing) { nil }
+  let(:audit) do
+    klass.new(cask, online:,
+                    strict:,
+                    new_cask:,
+                    signing:,
+                    only:,
+                    except:)
+  end
+
   def include_msg?(problems, msg)
     if msg.is_a?(Regexp)
       Array(problems).any? { |problem| msg.match?(problem[:message]) }
@@ -42,22 +59,6 @@ RSpec.describe Cask::Audit, :cask do
     failure_message do |audit|
       "expected to error with message #{message.inspect} but #{outcome(audit)}"
     end
-  end
-
-  let(:cask) { instance_double(Cask::Cask) }
-  let(:new_cask) { nil }
-  let(:online) { nil }
-  let(:only) { [] }
-  let(:except) { [] }
-  let(:strict) { nil }
-  let(:signing) { nil }
-  let(:audit) do
-    described_class.new(cask, online:,
-                              strict:,
-                              new_cask:,
-                              signing:,
-                              only:,
-                              except:)
   end
 
   describe "#new" do
@@ -1099,6 +1100,35 @@ RSpec.describe Cask::Audit, :cask do
 
         it { is_expected.to error_with(message) }
       end
+    end
+
+    describe "minimum OS checks" do
+      let(:online) { true }
+      let(:only) { ["min_os"] }
+      let(:cask) do
+        Cask::Cask.new("arch-min-os") do
+          version "1.0"
+          sha256 :no_check
+          url "https://brew.sh/arch-min-os.zip"
+          name "Arch Min OS"
+          homepage "https://brew.sh/"
+
+          on_arm do
+            depends_on macos: :big_sur
+          end
+
+          depends_on :macos
+
+          app "Arch Min OS.app"
+        end
+      end
+
+      before do
+        allow(audit).to receive_messages(cask_bundle_min_os:  MacOSVersion.from_symbol(:big_sur),
+                                         cask_sparkle_min_os: nil)
+      end
+
+      it { is_expected.to pass }
     end
 
     describe "preferred download URL formats" do

@@ -1,9 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "utils/pypi"
+require "formulary"
 
 RSpec.describe PyPI do
+  let(:klass) { PyPI }
+
   let(:pypi_package_url) do
     "https://files.pythonhosted.org/packages/b0/3f/2e1dad67eb172b6443b5eb37eb885a054a55cfd733393071499514140282/" \
       "snakemake-5.29.0.tar.gz"
@@ -17,39 +20,41 @@ RSpec.describe PyPI do
   end
 
   describe PyPI::Package do
+    let(:klass) { PyPI::Package }
+
     let(:package_checksum) { "47417307d08ecb0707b3b29effc933bd63d8c8e3ab15509c62b685b7614c6568" }
     let(:old_package_checksum) { "2367ce91baf7f8fa7738d33aff9670ffdf5410bbac49aeb209f73b45a3425046" }
 
-    let(:package) { described_class.new("snakemake") }
-    let(:package_with_version) { described_class.new("snakemake==5.28.0") }
-    let(:package_with_different_version) { described_class.new("snakemake==5.29.0") }
-    let(:package_with_extra) { described_class.new("snakemake[foo]") }
-    let(:package_with_extra_and_version) { described_class.new("snakemake[foo]==5.28.0") }
-    let(:package_with_different_capitalization) { described_class.new("SNAKEMAKE") }
-    let(:package_from_pypi_url) { described_class.new(pypi_package_url, is_url: true) }
-    let(:package_from_non_pypi_url) { described_class.new(non_pypi_package_url, is_url: true) }
-    let(:other_package) { described_class.new("virtualenv==20.2.0") }
+    let(:package) { klass.new("snakemake") }
+    let(:package_with_version) { klass.new("snakemake==5.28.0") }
+    let(:package_with_different_version) { klass.new("snakemake==5.29.0") }
+    let(:package_with_extra) { klass.new("snakemake[foo]") }
+    let(:package_with_extra_and_version) { klass.new("snakemake[foo]==5.28.0") }
+    let(:package_with_different_capitalization) { klass.new("SNAKEMAKE") }
+    let(:package_from_pypi_url) { klass.new(pypi_package_url, is_url: true) }
+    let(:package_from_non_pypi_url) { klass.new(non_pypi_package_url, is_url: true) }
+    let(:other_package) { klass.new("virtualenv==20.2.0") }
 
     describe "initialize" do
       specify do
-        expect(described_class.new("foo").name).to eq "foo"
-        expect(described_class.new("foo[bar]").name).to eq "foo"
-        expect(described_class.new("foo[bar]").extras).to eq ["bar"]
-        expect(described_class.new("foo[bar,baz]").extras).to eq ["bar", "baz"]
-        expect(described_class.new("foo==1.2.3").name).to eq "foo"
-        expect(described_class.new("foo==1.2.3").version).to eq "1.2.3"
-        expect(described_class.new("foo[bar]==1.2.3").extras).to eq ["bar"]
-        expect(described_class.new("foo[bar,baz]==1.2.3").extras).to eq ["bar", "baz"]
-        expect(described_class.new("foo[bar]==1.2.3").version).to eq "1.2.3"
-        expect(described_class.new("foo[bar,baz]==1.2.3").version).to eq "1.2.3"
-        expect(described_class.new(pypi_package_url, is_url: true).name).to eq "snakemake"
-        expect(described_class.new(pypi_package_url, is_url: true).version).to eq "5.29.0"
+        expect(klass.new("foo").name).to eq "foo"
+        expect(klass.new("foo[bar]").name).to eq "foo"
+        expect(klass.new("foo[bar]").extras).to eq ["bar"]
+        expect(klass.new("foo[bar,baz]").extras).to eq ["bar", "baz"]
+        expect(klass.new("foo==1.2.3").name).to eq "foo"
+        expect(klass.new("foo==1.2.3").version).to eq "1.2.3"
+        expect(klass.new("foo[bar]==1.2.3").extras).to eq ["bar"]
+        expect(klass.new("foo[bar,baz]==1.2.3").extras).to eq ["bar", "baz"]
+        expect(klass.new("foo[bar]==1.2.3").version).to eq "1.2.3"
+        expect(klass.new("foo[bar,baz]==1.2.3").version).to eq "1.2.3"
+        expect(klass.new(pypi_package_url, is_url: true).name).to eq "snakemake"
+        expect(klass.new(pypi_package_url, is_url: true).version).to eq "5.29.0"
       end
     end
 
     describe ".version=" do
       it "sets for package names" do
-        package = described_class.new("snakemake==5.28.0")
+        package = klass.new("snakemake==5.28.0")
         expect(package.version).to eq "5.28.0"
 
         package.version = "5.29.0"
@@ -57,7 +62,7 @@ RSpec.describe PyPI do
       end
 
       it "sets for PyPI package URLs" do
-        package = described_class.new(old_pypi_package_url, is_url: true)
+        package = klass.new(old_pypi_package_url, is_url: true)
         expect(package.version).to eq "5.28.0"
 
         package.version = "5.29.0"
@@ -65,7 +70,7 @@ RSpec.describe PyPI do
       end
 
       it "fails for non-PYPI package URLs" do
-        package = described_class.new(non_pypi_package_url, is_url: true)
+        package = klass.new(non_pypi_package_url, is_url: true)
 
         expect { package.version = "1.2.3" }.to raise_error(ArgumentError)
       end
@@ -167,21 +172,87 @@ RSpec.describe PyPI do
         "--uploaded-prior-to=2026-04-03T12:00:00Z", "--report=/dev/stdout", "snakemake"
       ).and_return('{"install":[]}')
 
-      expect(described_class.pip_report([PyPI::Package.new("snakemake")])).to eq([])
+      expect(klass.pip_report([PyPI::Package.new("snakemake")])).to eq([])
+    end
+  end
+
+  describe ".update_python_resources!" do
+    it "keeps resources with livecheck blocks" do
+      path = mktmpdir/"foo.rb"
+      livecheck_resource = <<~RUBY
+        resource "aws-lambda-rie" do
+          url "https://github.com/aws/aws-lambda-runtime-interface-emulator/archive/refs/tags/v1.0.tar.gz"
+          sha256 "#{"c" * 64}"
+
+          livecheck do
+            url "https://github.com/aws/aws-lambda-runtime-interface-emulator/releases"
+            regex(/^v?(\\d+(?:\\.\\d+)+)$/i)
+          end
+        end
+      RUBY
+      contents = <<~RUBY
+        class Foo < Formula
+          url "https://files.pythonhosted.org/packages/foo-1.0.tar.gz"
+          sha256 "#{"a" * 64}"
+
+          resource "bar" do
+            url "https://files.pythonhosted.org/packages/bar-0.9.tar.gz"
+            sha256 "#{"b" * 64}"
+          end
+
+        #{livecheck_resource}
+
+          def install
+            bin.install "foo"
+          end
+        end
+      RUBY
+      path.write(contents)
+      package = PyPI::Package.new("bar==1.0")
+      livecheck_package = PyPI::Package.new("aws-lambda-rie==1.0")
+
+      allow(Formula).to receive(:[]).with("python").and_return(instance_double(Formula, ensure_installed!: true))
+      allow(klass).to receive(:pip_report)
+        .and_return([PyPI::Package.new("foo==1.0"), package, livecheck_package])
+      allow(package).to receive(:pypi_info).and_return(
+        ["bar", "https://files.pythonhosted.org/packages/bar-1.0.tar.gz", "d" * 64, "1.0", nil],
+      )
+      expect(livecheck_package).not_to receive(:pypi_info)
+
+      klass.update_python_resources!(Formulary.from_contents("foo", path, contents),
+                                     package_name: "foo", silent: true)
+
+      expect(path.read).to eq <<~RUBY
+        class Foo < Formula
+          url "https://files.pythonhosted.org/packages/foo-1.0.tar.gz"
+          sha256 "#{"a" * 64}"
+
+          resource "bar" do
+            url "https://files.pythonhosted.org/packages/bar-1.0.tar.gz"
+            sha256 "#{"d" * 64}"
+          end
+
+        #{livecheck_resource}
+
+          def install
+            bin.install "foo"
+          end
+        end
+      RUBY
     end
   end
 
   describe "update_pypi_url", :needs_network do
     it "updates url to new version" do
-      expect(described_class.update_pypi_url(old_pypi_package_url, "5.29.0")).to eq pypi_package_url
+      expect(klass.update_pypi_url(old_pypi_package_url, "5.29.0")).to eq pypi_package_url
     end
 
     it "returns nil for invalid versions" do
-      expect(described_class.update_pypi_url(old_pypi_package_url, "0.0.0")).to be_nil
+      expect(klass.update_pypi_url(old_pypi_package_url, "0.0.0")).to be_nil
     end
 
     it "returns nil for non-pypi urls" do
-      expect(described_class.update_pypi_url(non_pypi_package_url, "1.1")).to be_nil
+      expect(klass.update_pypi_url(non_pypi_package_url, "1.1")).to be_nil
     end
   end
 end

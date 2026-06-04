@@ -14,7 +14,7 @@ class TestRunnerFormula
   attr_reader :eval_all
 
   sig { params(formula: Formula, eval_all: T::Boolean).void }
-  def initialize(formula, eval_all: Homebrew::EnvConfig.eval_all?)
+  def initialize(formula, eval_all: false)
     Formulary.enable_factory_cache!
     @formula = formula
     @name = T.let(formula.name, String)
@@ -25,22 +25,22 @@ class TestRunnerFormula
 
   sig { returns(T::Boolean) }
   def macos_only?
-    formula.requirements.any? { |r| r.is_a?(MacOSRequirement) && !r.version_specified? }
+    !linux_compatible?
   end
 
   sig { returns(T::Boolean) }
   def macos_compatible?
-    !linux_only?
+    formula.supports_macos?
   end
 
   sig { returns(T::Boolean) }
   def linux_only?
-    formula.requirements.any?(LinuxRequirement)
+    !macos_compatible?
   end
 
   sig { returns(T::Boolean) }
   def linux_compatible?
-    !macos_only?
+    formula.supports_linux?
   end
 
   sig { returns(T::Boolean) }
@@ -88,22 +88,14 @@ class TestRunnerFormula
     cache_key = :"#{platform}_#{arch}_#{macos_version}"
 
     @dependent_hash[cache_key] ||= begin
-      formula_selector, eval_all_env = if eval_all
-        [:all, "1"]
-      else
-        [:installed, nil]
-      end
+      os = macos_version || platform
+      arch = Homebrew::SimulateSystem.arch_symbols.fetch(arch)
 
-      with_env(HOMEBREW_EVAL_ALL: eval_all_env) do
-        os = macos_version || platform
-        arch = Homebrew::SimulateSystem.arch_symbols.fetch(arch)
-
-        Homebrew::SimulateSystem.with(os:, arch:) do
-          Formula.public_send(formula_selector)
-                 .select { |candidate_f| candidate_f.deps.map(&:name).include?(name) }
-                 .map { |f| TestRunnerFormula.new(f, eval_all:) }
-                 .freeze
-        end
+      Homebrew::SimulateSystem.with(os:, arch:) do
+        (eval_all ? Formula.all(eval_all: true) : Formula.installed)
+          .select { |candidate_f| candidate_f.deps.map(&:name).include?(name) }
+          .map { |f| TestRunnerFormula.new(f, eval_all:) }
+          .freeze
       end
     end
 

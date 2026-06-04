@@ -60,16 +60,6 @@ module Homebrew
     # @api private
     class GhIncompatible < RuntimeError; end
 
-    # Returns whether attestation verification is enabled.
-    #
-    # @api private
-    sig { returns(T::Boolean) }
-    def self.enabled?
-      return false if Homebrew::EnvConfig.no_verify_attestations?
-
-      Homebrew::EnvConfig.verify_attestations?
-    end
-
     # Returns a path to a suitable `gh` executable for attestation verification.
     #
     # @api private

@@ -116,12 +116,15 @@ module Homebrew
           [prop.to_s, send(prop)]
         end.to_h
 
-        hash["raw_artifacts"] = raw_artifacts.map do |artifact|
+        hash["raw_artifacts"] = ::Utils.deep_compact_blank(raw_artifacts.map do |artifact|
           serialize_artifact_args(artifact)
-        end
+        end, compact_zero: false)
 
         hash = ::Utils.deep_stringify_symbols(hash)
-        ::Utils.deep_compact_blank(hash)
+        raw_artifacts = hash["raw_artifacts"]
+        hash = ::Utils.deep_compact_blank(hash)
+        hash["raw_artifacts"] = raw_artifacts if raw_artifacts.present?
+        hash
       end
 
       sig { params(hash: T::Hash[String, T.untyped]).returns(CaskStruct) }

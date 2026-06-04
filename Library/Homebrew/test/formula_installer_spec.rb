@@ -13,6 +13,8 @@ require "test/support/fixtures/failball"
 require "test/support/fixtures/failball_offline_install"
 
 RSpec.describe FormulaInstaller do
+  let(:klass) { FormulaInstaller }
+
   matcher :be_poured_from_bottle do
     match(&:poured_from_bottle)
   end
@@ -20,7 +22,7 @@ RSpec.describe FormulaInstaller do
   def temporary_install(formula, **options)
     expect(formula).not_to be_latest_version_installed
 
-    installer = described_class.new(formula, **options)
+    installer = klass.new(formula, **options)
 
     installer.fetch
     installer.install
@@ -84,10 +86,42 @@ RSpec.describe FormulaInstaller do
     end
   end
 
+  describe "#build_bottle_postinstall" do
+    let(:f) do
+      formula "bottle-config" do
+        url "foo-1.0"
+      end
+    end
+    let(:config_file) { HOMEBREW_PREFIX/"etc/bottle-config.conf" }
+
+    before do
+      FileUtils.rm_rf f.rack
+      FileUtils.rm_f config_file
+      FileUtils.rm_f Pathname("#{config_file}.default")
+    end
+
+    after do
+      FileUtils.rm_rf f.rack
+      FileUtils.rm_f config_file
+      FileUtils.rm_f Pathname("#{config_file}.default")
+    end
+
+    it "stores new prefix config where install_etc_var restores it from" do
+      installer = klass.new(f)
+      installer.build_bottle_preinstall
+      config_file.dirname.mkpath
+      config_file.write "new\n"
+
+      installer.build_bottle_postinstall
+
+      expect((f.bottle_prefix/"etc/bottle-config.conf").read).to eq("new\n")
+    end
+  end
+
   describe "#verify_deps_exist" do
     it "does not install an untapped dependency tap" do
       formula = Testball.new
-      installer = described_class.new(formula)
+      installer = klass.new(formula)
       tap = instance_double(Tap, user: "user", repository: "repo", to_s: "user/repo", installed?: false)
 
       allow(installer).to receive(:compute_dependencies).and_raise(TapFormulaUnavailableError.new(tap, "foo"))
@@ -101,13 +135,67 @@ RSpec.describe FormulaInstaller do
     end
   end
 
+  describe "#fetch_bottle_tab" do
+    it "does not enqueue cached bottle manifests" do
+      formula = formula("deno") do
+        url "https://brew.sh/deno-2.7.11.tar.gz"
+
+        bottle do
+          root_url HOMEBREW_BOTTLE_DEFAULT_DOMAIN
+          sha256 cellar: :any_skip_relocation,
+                 Utils::Bottles.tag.to_sym => "d7b9f4e8bf83608b71fe958a99f19f2e5e68bb2582965d32e41759c24f1aef97"
+        end
+      end
+      installer = FormulaInstaller.new(formula)
+      installer.download_queue = instance_double(Homebrew::DownloadQueue)
+      manifest_resource = formula.bottle&.github_packages_manifest_resource
+      cached_download = manifest_resource&.cached_download
+
+      allow(manifest_resource).to receive(:downloaded?).and_return(true)
+      expect(manifest_resource).to receive(:verify_download_integrity).with(cached_download) do
+        expect(Context.current.quiet?).to be(true)
+      end
+      expect(manifest_resource).not_to receive(:clear_cache)
+      expect(installer.download_queue).not_to receive(:enqueue)
+
+      installer.fetch_bottle_tab(enqueue: true)
+    end
+
+    it "enqueues invalid cached bottle manifests" do
+      formula = formula("deno") do
+        url "https://brew.sh/deno-2.7.11.tar.gz"
+
+        bottle do
+          root_url HOMEBREW_BOTTLE_DEFAULT_DOMAIN
+          sha256 cellar: :any_skip_relocation,
+                 Utils::Bottles.tag.to_sym => "d7b9f4e8bf83608b71fe958a99f19f2e5e68bb2582965d32e41759c24f1aef97"
+        end
+      end
+      installer = FormulaInstaller.new(formula)
+      installer.download_queue = instance_double(Homebrew::DownloadQueue)
+      manifest_resource = formula.bottle&.github_packages_manifest_resource
+
+      allow(manifest_resource).to receive(:downloaded?).and_return(true)
+      manifest_resource&.instance_variable_set(:@manifest_annotations, {})
+      expect(manifest_resource).to receive(:verify_download_integrity) do
+        expect(Context.current.quiet?).to be(true)
+        raise Resource::BottleManifest::Error
+      end
+      expect(installer.download_queue).to receive(:enqueue).with(manifest_resource)
+
+      installer.fetch_bottle_tab(enqueue: true)
+
+      expect(manifest_resource&.instance_variable_get(:@manifest_annotations)).to be_nil
+    end
+  end
+
   describe "linking defaults" do
     it "links non-keg-only formulae when link_keg is false" do
       ordinary_formula = formula "homebrew-link-default" do
         url "foo-1.0"
       end
 
-      expect(described_class.new(ordinary_formula, link_keg: false).link_keg).to be true
+      expect(klass.new(ordinary_formula, link_keg: false).link_keg).to be true
     end
 
     it "links non-keg-only dependencies even when they were not previously linked" do
@@ -116,7 +204,7 @@ RSpec.describe FormulaInstaller do
       end
       dependency = instance_double(Dependency, to_formula: dependency_formula, name: dependency_formula.name,
                                                options: Options.new)
-      installer = described_class.new(Testball.new)
+      installer = klass.new(Testball.new)
       child_installer = nil
 
       allow(dependency_formula).to receive_messages(
@@ -126,7 +214,7 @@ RSpec.describe FormulaInstaller do
         any_version_installed?:    false,
       )
       allow(installer).to receive(:oh1)
-      allow(described_class).to receive(:new).and_wrap_original do |original, formula, **kwargs|
+      allow(klass).to receive(:new).and_wrap_original do |original, formula, **kwargs|
         instance = original.call(formula, **kwargs)
         next instance if formula != dependency_formula
 
@@ -139,6 +227,31 @@ RSpec.describe FormulaInstaller do
 
       expect(child_installer).not_to be_installed_on_request
       expect(child_installer&.link_keg).to be true
+    end
+
+    it "disables Bubblewrap auto-install until the implicit Bubblewrap dependency is installed" do
+      formula = formula "homebrew-bubblewrap-bootstrap-target" do
+        url "foo-1.0"
+      end
+      installer = FormulaInstaller.new(formula)
+      dependency_names = %w[libcap bubblewrap zlib]
+      dependencies = dependency_names.map do |name|
+        instance_double(Dependency, name:, implicit?: name == "bubblewrap")
+      end
+      installing_bubblewrap_env = []
+
+      allow(installer).to receive(:oh1)
+      allow(installer).to receive(:install_dependency) do |dependency|
+        installing_bubblewrap_env << [dependency.name, ENV.fetch("HOMEBREW_INSTALLING_BUBBLEWRAP", nil)]
+      end
+
+      installer.send(:install_dependencies, dependencies)
+
+      expect(installing_bubblewrap_env).to eq([
+        ["libcap", "1"],
+        ["bubblewrap", "1"],
+        ["zlib", nil],
+      ])
     end
   end
 
@@ -158,13 +271,13 @@ RSpec.describe FormulaInstaller do
     end
 
     it "does not link by default when it is not installed on request" do
-      fi = described_class.new(keg_only_formula)
+      fi = klass.new(keg_only_formula)
 
       expect(fi.link_keg).to be false
     end
 
     it "links by default when no sibling variants are installed" do
-      fi = described_class.new(keg_only_formula, installed_on_request: true)
+      fi = klass.new(keg_only_formula, installed_on_request: true)
 
       expect(fi.link_keg).to be true
     end
@@ -172,7 +285,7 @@ RSpec.describe FormulaInstaller do
     it "does not link by default when any version is already installed" do
       allow(keg_only_formula).to receive(:any_version_installed?).and_return(true)
 
-      fi = described_class.new(keg_only_formula)
+      fi = klass.new(keg_only_formula)
 
       expect(fi.link_keg).to be false
     end
@@ -180,7 +293,7 @@ RSpec.describe FormulaInstaller do
     it "links when explicitly requested" do
       allow(keg_only_formula).to receive(:any_version_installed?).and_return(true)
 
-      fi = described_class.new(keg_only_formula, link_keg: true)
+      fi = klass.new(keg_only_formula, link_keg: true)
 
       expect(fi.link_keg).to be true
     end
@@ -193,7 +306,7 @@ RSpec.describe FormulaInstaller do
       allow(other_version).to receive(:any_version_installed?).and_return(true)
       allow(keg_only_formula).to receive(:link_overwrite_formulae).and_return([other_version])
 
-      fi = described_class.new(keg_only_formula)
+      fi = klass.new(keg_only_formula)
 
       expect(fi.link_keg).to be false
     end
@@ -205,7 +318,7 @@ RSpec.describe FormulaInstaller do
       allow(unversioned_formula).to receive(:any_version_installed?).and_return(true)
       allow(keg_only_formula).to receive(:link_overwrite_formulae).and_return([unversioned_formula])
 
-      fi = described_class.new(keg_only_formula)
+      fi = klass.new(keg_only_formula)
 
       expect(fi.link_keg).to be false
     end
@@ -217,7 +330,7 @@ RSpec.describe FormulaInstaller do
       end
       allow(keg_only_formula).to receive(:link_overwrite_formulae).and_return([unversioned_formula])
 
-      fi = described_class.new(keg_only_formula)
+      fi = klass.new(keg_only_formula)
 
       expect(fi.link_keg).to be false
     end
@@ -230,7 +343,7 @@ RSpec.describe FormulaInstaller do
       allow(full_variant).to receive(:any_version_installed?).and_return(true)
       allow(keg_only_formula).to receive(:link_overwrite_formulae).and_return([full_variant])
 
-      fi = described_class.new(keg_only_formula)
+      fi = klass.new(keg_only_formula)
 
       expect(fi.link_keg).to be false
     end
@@ -248,7 +361,7 @@ RSpec.describe FormulaInstaller do
       allow(full_formula).to receive_messages(any_version_installed?:  false,
                                               link_overwrite_formulae: [non_full_variant])
 
-      fi = described_class.new(full_formula)
+      fi = klass.new(full_formula)
 
       expect(fi.link_keg).to be false
     end
@@ -280,7 +393,7 @@ RSpec.describe FormulaInstaller do
     end
 
     it "only optlinks when default linking is disabled by an installed sibling" do
-      installer = described_class.new(versioned_formula)
+      installer = klass.new(versioned_formula)
 
       expect(installer.link_keg).to be false
       expect(Homebrew::Unlink).not_to receive(:unlink_link_overwrite_formulae)
@@ -291,7 +404,7 @@ RSpec.describe FormulaInstaller do
     end
 
     it "unlinks siblings before linking when explicitly requested" do
-      installer = described_class.new(versioned_formula, link_keg: true)
+      installer = klass.new(versioned_formula, link_keg: true)
 
       expect(installer.link_keg).to be true
       expect(Homebrew::Unlink).to receive(:unlink_link_overwrite_formulae).with(versioned_formula,
@@ -320,7 +433,7 @@ RSpec.describe FormulaInstaller do
       allow(keg_only_formula).to receive_messages(any_version_installed?: false, linked?: false,
                                                   link_overwrite_formulae: [unversioned_formula])
 
-      installer = described_class.new(keg_only_formula, installed_on_request: true)
+      installer = klass.new(keg_only_formula, installed_on_request: true)
 
       expect(installer.send(:link_manual_command_warning)).to eq <<~EOS
         #{formula_name} was installed but not linked because #{base_name} is already linked.
@@ -346,7 +459,7 @@ RSpec.describe FormulaInstaller do
       Formulary.cache.delete(dep_path)
       f = Formulary.factory(dep_name)
 
-      fi = described_class.new(f)
+      fi = klass.new(f)
 
       expect do
         fi.check_install_sanity
@@ -379,7 +492,7 @@ RSpec.describe FormulaInstaller do
       RUBY
       Formulary.cache.delete(formula2_path)
 
-      fi = described_class.new(formula1)
+      fi = klass.new(formula1)
 
       expect do
         fi.check_install_sanity
@@ -415,7 +528,7 @@ RSpec.describe FormulaInstaller do
       expect(dependency_keg).to be_linked
       expect(dependency).to be_pinned
 
-      fi = described_class.new(dependent)
+      fi = klass.new(dependent)
 
       expect do
         fi.check_install_sanity
@@ -439,7 +552,7 @@ RSpec.describe FormulaInstaller do
       Formulary.cache.delete(f_path)
 
       f = Formulary.factory(f_name)
-      fi = described_class.new(f)
+      fi = klass.new(f)
 
       expect do
         fi.forbidden_license_check
@@ -463,7 +576,7 @@ RSpec.describe FormulaInstaller do
       Formulary.cache.delete(f_path)
 
       f = Formulary.factory(f_name)
-      fi = described_class.new(f)
+      fi = klass.new(f)
 
       expect do
         fi.forbidden_license_check
@@ -496,7 +609,7 @@ RSpec.describe FormulaInstaller do
       Formulary.cache.delete(f_path)
 
       f = Formulary.factory(f_name)
-      fi = described_class.new(f)
+      fi = klass.new(f)
 
       expect do
         fi.forbidden_license_check
@@ -518,7 +631,7 @@ RSpec.describe FormulaInstaller do
       Formulary.cache.delete(f_path)
 
       f = Formulary.factory(f_name)
-      fi = described_class.new(f)
+      fi = klass.new(f)
 
       expect do
         fi.forbidden_license_check
@@ -551,7 +664,7 @@ RSpec.describe FormulaInstaller do
       Formulary.cache.delete(f_path)
 
       f = Formulary.factory("#{f_tap}/#{f_name}")
-      fi = described_class.new(f)
+      fi = klass.new(f)
 
       expect do
         fi.forbidden_tap_check
@@ -574,7 +687,7 @@ RSpec.describe FormulaInstaller do
       Formulary.cache.delete(f_path)
 
       f = Formulary.factory("#{f_tap}/#{f_name}")
-      fi = described_class.new(f)
+      fi = klass.new(f)
 
       expect do
         fi.forbidden_tap_check
@@ -597,7 +710,7 @@ RSpec.describe FormulaInstaller do
       Formulary.cache.delete(f_path)
 
       f = Formulary.factory("#{f_tap}/#{f_name}")
-      fi = described_class.new(f)
+      fi = klass.new(f)
 
       expect { fi.forbidden_tap_check }.not_to raise_error
     ensure
@@ -629,7 +742,7 @@ RSpec.describe FormulaInstaller do
       Formulary.cache.delete(f_path)
 
       f = Formulary.factory(f_name)
-      fi = described_class.new(f)
+      fi = klass.new(f)
 
       expect do
         fi.forbidden_tap_check
@@ -652,7 +765,7 @@ RSpec.describe FormulaInstaller do
       Formulary.cache.delete(f_path)
 
       f = Formulary.factory(f_name)
-      fi = described_class.new(f)
+      fi = klass.new(f)
 
       expect do
         fi.forbidden_formula_check
@@ -682,11 +795,58 @@ RSpec.describe FormulaInstaller do
       Formulary.cache.delete(f_path)
 
       f = Formulary.factory(f_name)
-      fi = described_class.new(f)
+      fi = klass.new(f)
 
       expect do
         fi.forbidden_formula_check
       end.to raise_error(CannotInstallFormulaError, /#{dep_name} formula was forbidden/)
+    end
+  end
+
+  describe "#prelude_fetch" do
+    it "raises on forbidden formula tap before fetching the source from the API" do
+      homebrew_forbidden = Tap.fetch("homebrew/forbidden")
+      allow(Tap).to receive_messages(allowed_taps: Set.new, forbidden_taps: Set.new([homebrew_forbidden]))
+      f_name = "homebrew-forbidden-fail-fast-tap"
+      f_path = homebrew_forbidden.new_formula_path(f_name)
+      f_path.parent.mkpath
+      f_path.write <<~RUBY
+        class #{Formulary.class_s(f_name)} < Formula
+          url "foo"
+          version "0.1"
+        end
+      RUBY
+      Formulary.cache.delete(f_path)
+
+      f = Formulary.factory("#{homebrew_forbidden}/#{f_name}")
+      allow(f).to receive(:loaded_from_api?).and_return(true)
+      fi = klass.new(f)
+
+      expect(Homebrew::API::Formula).not_to receive(:source_download)
+
+      expect { fi.prelude_fetch }.to raise_error(CannotInstallFormulaError, /has the tap #{homebrew_forbidden}/)
+    ensure
+      FileUtils.rm_r(f_path.parent.parent)
+    end
+
+    it "raises on forbidden formula before fetching the source from the API" do
+      ENV["HOMEBREW_FORBIDDEN_FORMULAE"] = f_name = "homebrew-forbidden-fail-fast-formula"
+      f_path = CoreTap.instance.new_formula_path(f_name)
+      f_path.write <<~RUBY
+        class #{Formulary.class_s(f_name)} < Formula
+          url "foo"
+          version "0.1"
+        end
+      RUBY
+      Formulary.cache.delete(f_path)
+
+      f = Formulary.factory(f_name)
+      allow(f).to receive(:loaded_from_api?).and_return(true)
+      fi = klass.new(f)
+
+      expect(Homebrew::API::Formula).not_to receive(:source_download)
+
+      expect { fi.prelude_fetch }.to raise_error(CannotInstallFormulaError, /was forbidden/)
     end
   end
 
@@ -708,7 +868,7 @@ RSpec.describe FormulaInstaller do
   end
 
   describe "#caveats" do
-    subject(:formula_installer) { described_class.new(Testball.new) }
+    subject(:formula_installer) { klass.new(Testball.new) }
 
     it "shows audit problems if HOMEBREW_DEVELOPER is set" do
       ENV["HOMEBREW_DEVELOPER"] = "1"
@@ -737,7 +897,7 @@ RSpec.describe FormulaInstaller do
       expect(service).to receive(:to_plist).and_return("plist")
       expect(service).to receive(:to_systemd_unit).and_return("unit")
 
-      installer = described_class.new(formula)
+      installer = klass.new(formula)
       expect do
         installer.install_service
       end.not_to output(/Error: Failed to install service files/).to_stderr
@@ -766,7 +926,7 @@ RSpec.describe FormulaInstaller do
       expect(service).to receive(:to_systemd_unit).and_return("unit")
       expect(service).to receive(:to_systemd_timer).and_return("timer")
 
-      installer = described_class.new(formula)
+      installer = klass.new(formula)
       expect do
         installer.install_service
       end.not_to output(/Error: Failed to install service files/).to_stderr
@@ -784,7 +944,7 @@ RSpec.describe FormulaInstaller do
       expect(formula).to receive(:service?).and_return(nil)
       expect(formula).not_to receive(:launchd_service_path)
 
-      installer = described_class.new(formula)
+      installer = klass.new(formula)
       expect do
         installer.install_service
       end.not_to output(/Error: Failed to install service files/).to_stderr
@@ -805,7 +965,7 @@ RSpec.describe FormulaInstaller do
         .with(formula)
         .and_return(source_formula)
 
-      installer = described_class.new(formula)
+      installer = klass.new(formula)
 
       # Stub out the actual build subprocess since we only care about the guard
       allow(installer).to receive(:build_argv).and_return([])
@@ -827,11 +987,36 @@ RSpec.describe FormulaInstaller do
         .with(formula)
         .and_raise(CannotInstallFormulaError, "source code not found")
 
-      installer = described_class.new(formula)
+      installer = klass.new(formula)
 
       expect do
         installer.build
       end.to raise_error(CannotInstallFormulaError, /source code not found/)
+    end
+
+    it "exposes local formula paths to the sandbox" do
+      formula_path = mktmpdir/"homebrew-local-formula.rb"
+      FileUtils.touch formula_path
+      formula = formula("homebrew-local-formula", path: formula_path) do
+        url "foo"
+        version "1.0"
+      end
+      installer = klass.new(formula)
+      sandbox = instance_double(Sandbox)
+
+      allow(installer).to receive(:build_argv).and_return([])
+      allow(Sandbox).to receive_messages(ensure_sandbox_installed!: nil, available?: true, new: sandbox)
+      allow(sandbox).to receive_messages(record_log: nil, allow_read_if_exists: nil, allow_write_temp_and_cache: nil,
+                                         allow_write_log: nil, allow_cvs: nil, allow_fossil: nil,
+                                         allow_write_xcode: nil, allow_write_cellar: nil, deny_read_home: nil,
+                                         run: nil)
+      allow(formula).to receive_messages(logs: mktmpdir, update_head_version: nil, prefix: mktmpdir,
+                                         network_access_allowed?: true)
+      allow(Keg).to receive(:new).and_return(instance_double(Keg, empty_installation?: false))
+
+      expect(sandbox).to receive(:allow_read_if_exists).with(path: formula_path)
+
+      installer.build
     end
   end
 end

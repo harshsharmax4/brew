@@ -7,6 +7,8 @@ cask "with-preflight" do
   url "file://#{TEST_FIXTURE_DIR}/cask/MyFancyPkg.zip"
   homepage "https://brew.sh/fancy-pkg"
 
+  depends_on macos: :catalina
+
   pkg "MyFancyPkg/Fancy.pkg"
 
   preflight do

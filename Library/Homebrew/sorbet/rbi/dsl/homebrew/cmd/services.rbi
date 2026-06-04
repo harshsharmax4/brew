@@ -30,5 +30,8 @@ class Homebrew::Cmd::Services::Args < Homebrew::CLI::Args
   def no_wait?; end
 
   sig { returns(T.nilable(String)) }
+  def subcommand; end
+
+  sig { returns(T.nilable(String)) }
   def sudo_service_user; end
 end

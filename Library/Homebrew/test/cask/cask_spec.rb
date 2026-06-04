@@ -2,6 +2,9 @@
 # frozen_string_literal: true
 
 RSpec.describe Cask::Cask, :cask do
+  let(:klass) { Cask::Cask }
+  let(:cask) { klass.new("versioned-cask") }
+
   def write_info_plist(path, short_version: nil, bundle_version: nil, contents: nil)
     info_plist = path/"Contents/Info.plist"
     info_plist.dirname.mkpath
@@ -54,7 +57,36 @@ RSpec.describe Cask::Cask, :cask do
     Cask::CaskLoader.load(path)
   end
 
-  let(:cask) { described_class.new("versioned-cask") }
+  describe ".all" do
+    it "skips untrusted tap casks when trust is enabled" do
+      tap = Tap.fetch("thirdparty", "foo")
+      cask_path = tap.cask_dir/"untrusted.rb"
+      cask_path.dirname.mkpath
+      cask_path.write <<~RUBY
+        raise "untrusted cask evaluated"
+      RUBY
+
+      allow(CoreCaskTap.instance).to receive(:cask_tokens).and_return([])
+      allow(Tap).to receive(:reject).and_return([tap])
+      expect(Cask::CaskLoader).not_to receive(:load).with(cask_path)
+
+      with_env(HOMEBREW_REQUIRE_TAP_TRUST: "1") do
+        expect { expect(klass.all(eval_all: true)).to eq([]) }
+          .to output(%r{Skipping thirdparty/foo because it is not trusted}).to_stderr
+      end
+    ensure
+      FileUtils.rm_rf HOMEBREW_TAP_DIRECTORY/"thirdparty"
+    end
+
+    it "allows all casks when trust is disabled" do
+      allow(CoreCaskTap.instance).to receive(:cask_tokens).and_return([])
+      allow(Tap).to receive(:reject).and_return([])
+
+      with_env(HOMEBREW_NO_REQUIRE_TAP_TRUST: "1") do
+        expect(klass.all).to eq([])
+      end
+    end
+  end
 
   context "when multiple versions are installed" do
     describe "#installed_version" do
@@ -76,6 +108,35 @@ RSpec.describe Cask::Cask, :cask do
     end
   end
 
+  describe "#pinned?" do
+    it "ignores and replaces a dangling pin" do
+      HOMEBREW_PINNED_CASKS.mkpath
+      cask.pin_path.make_relative_symlink(cask.caskroom_path/"missing")
+
+      expect(cask).not_to be_pinned
+      expect(cask.pinned_version).to be_nil
+
+      allow(cask).to receive(:installed_version).and_return("1.0")
+      (cask.caskroom_path/"1.0").mkpath
+      cask.pin
+
+      expect(cask).to be_pinned
+      expect(cask.pinned_version).to eq("1.0")
+    end
+
+    it "replaces a regular file pin record" do
+      HOMEBREW_PINNED_CASKS.mkpath
+      cask.pin_path.write("not a symlink")
+      allow(cask).to receive(:installed_version).and_return("1.0")
+      (cask.caskroom_path/"1.0").mkpath
+
+      cask.pin
+
+      expect(cask).to be_pinned
+      expect(cask.pin_path).to be_a_symlink
+    end
+  end
+
   describe "load" do
     let(:tap_path) { CoreCaskTap.instance.path }
     let(:file_dirname) { Pathname.new(__FILE__).dirname }
@@ -83,13 +144,13 @@ RSpec.describe Cask::Cask, :cask do
 
     it "returns an instance of the Cask for the given token" do
       c = Cask::CaskLoader.load("local-caffeine")
-      expect(c).to be_a(described_class)
+      expect(c).to be_a(klass)
       expect(c.token).to eq("local-caffeine")
     end
 
     it "returns an instance of the Cask from a specific file location" do
       c = Cask::CaskLoader.load("#{tap_path}/Casks/local-caffeine.rb")
-      expect(c).to be_a(described_class)
+      expect(c).to be_a(klass)
       expect(c).not_to be_loaded_from_api
       expect(c).not_to be_loaded_from_internal_api
       expect(c.token).to eq("local-caffeine")
@@ -97,7 +158,7 @@ RSpec.describe Cask::Cask, :cask do
 
     it "returns an instance of the Cask from a JSON file" do
       c = Cask::CaskLoader.load("#{TEST_FIXTURE_DIR}/cask/caffeine.json")
-      expect(c).to be_a(described_class)
+      expect(c).to be_a(klass)
       expect(c).to be_loaded_from_api
       expect(c).not_to be_loaded_from_internal_api
       expect(c.token).to eq("caffeine")
@@ -105,7 +166,7 @@ RSpec.describe Cask::Cask, :cask do
 
     it "returns an instance of the Cask from an internal JSON file" do
       c = Cask::CaskLoader.load("#{TEST_FIXTURE_DIR}/cask/caffeine.internal.json")
-      expect(c).to be_a(described_class)
+      expect(c).to be_a(klass)
       expect(c).to be_loaded_from_api
       expect(c).to be_loaded_from_internal_api
       expect(c.token).to eq("caffeine")
@@ -113,7 +174,7 @@ RSpec.describe Cask::Cask, :cask do
 
     it "returns an instance of the Cask from a URL", :needs_utils_curl do
       c = Cask::CaskLoader.load("file://#{tap_path}/Casks/local-caffeine.rb")
-      expect(c).to be_a(described_class)
+      expect(c).to be_a(klass)
       expect(c.token).to eq("local-caffeine")
     end
 
@@ -125,7 +186,7 @@ RSpec.describe Cask::Cask, :cask do
 
     it "returns an instance of the Cask from a relative file location" do
       c = Cask::CaskLoader.load(relative_tap_path/"Casks/local-caffeine.rb")
-      expect(c).to be_a(described_class)
+      expect(c).to be_a(klass)
       expect(c.token).to eq("local-caffeine")
     end
 
@@ -166,7 +227,7 @@ RSpec.describe Cask::Cask, :cask do
     describe "versioned casks" do
       subject { cask.outdated_version }
 
-      let(:cask) { described_class.new("basic-cask") }
+      let(:cask) { klass.new("basic-cask") }
 
       shared_examples "versioned casks" do |tap_version, expectations|
         expectations.each do |installed_version, expected_output|
@@ -330,7 +391,7 @@ RSpec.describe Cask::Cask, :cask do
     end
 
     describe ":latest casks" do
-      let(:cask) { described_class.new("basic-cask") }
+      let(:cask) { klass.new("basic-cask") }
 
       shared_examples ":latest cask" do |greedy, outdated_sha, tap_version, expectations|
         expectations.each do |installed_version, expected_output|
@@ -389,7 +450,9 @@ RSpec.describe Cask::Cask, :cask do
 
     context "when it is from a non-core tap" do
       it "returns the fully-qualified name of the cask" do
-        c = Cask::CaskLoader.load("third-party/tap/third-party-cask")
+        c = with_env(HOMEBREW_NO_REQUIRE_TAP_TRUST: "1") do
+          Cask::CaskLoader.load("third-party/tap/third-party-cask")
+        end
         expect(c.full_name).to eq("third-party/tap/third-party-cask")
       end
     end
@@ -425,7 +488,7 @@ RSpec.describe Cask::Cask, :cask do
           trash: ["#{TEST_TMPDIR}/foo", "#{TEST_TMPDIR}/bar"],
         }] },
         { pkg: ["ManyArtifacts/ManyArtifacts.pkg"] },
-        { app: ["ManyArtifacts/ManyArtifacts.app"] },
+        { app: ["ManyArtifacts/ManyArtifacts.app"], target: "#{TEST_TMPDIR}/cask-appdir/ManyArtifacts.app" },
         { uninstall_postflight: nil },
         { postflight: nil },
         { zap: [{
@@ -500,128 +563,16 @@ RSpec.describe Cask::Cask, :cask do
     end
   end
 
-  describe "#contains_os_specific_artifacts?" do
-    it "returns false when there are no OSes defined" do
-      cask = described_class.new("test-no-os") do
-        version "0.0.1,2"
-
-        url "https://brew.sh/test-0.0.1.dmg"
-        name "Test"
-        desc "Test cask"
-        homepage "https://brew.sh"
-      end
-
-      expect(cask.contains_os_specific_artifacts?).to be false
-    end
-
-    it "returns false when there are no artifacts" do
-      cask = described_class.new("test-os-no-artifacts") do
-        os macos: "mac", linux: "Linux"
-        version "0.0.1,2"
-
-        url "https://brew.sh/test-0.0.1.dmg"
-        name "Test"
-        desc "Test cask"
-        homepage "https://brew.sh"
-      end
-
-      expect(cask.contains_os_specific_artifacts?).to be false
-    end
-
-    it "returns false when there are scoped app" do
-      cask = described_class.new("test-macos-app-artifact") do
-        version "0.0.1,2"
-
-        url "https://brew.sh/test-0.0.1.dmg"
-        name "Test"
-        desc "Test cask"
-        homepage "https://brew.sh"
-
-        on_macos do
-          app "Test.app"
-        end
-      end
-
-      expect(cask.contains_os_specific_artifacts?).to be false
-    end
-
-    it "returns false when version is only defined in on_* blocks and referenced at top level" do
-      cask = described_class.new("test-version-in-on-blocks") do
-        on_monterey :or_newer do
-          version "2.0"
-        end
-        on_big_sur :or_older do
-          version "1.0"
-        end
-
-        url "https://brew.sh/test-#{version.major}.dmg"
-        name "Test"
-        desc "Test cask"
-        homepage "https://brew.sh"
-      end
-
-      expect(cask.contains_os_specific_artifacts?).to be false
-    end
-
-    it "returns true when there are unscoped app artifacts" do
-      cask = described_class.new("test-os-app-artifact") do
-        os macos: "mac", linux: "Linux"
-        version "0.0.1,2"
-
-        url "https://brew.sh/test-0.0.1.dmg"
-        name "Test"
-        desc "Test cask"
-        homepage "https://brew.sh"
-
-        app "Test.app"
-      end
-
-      expect(cask.contains_os_specific_artifacts?).to be true
-    end
-  end
-
   describe "#supports_linux?" do
-    it "uses explicit macOS dependencies before falling back to heuristics" do
+    it "uses explicit OS dependencies and defaults to Linux support" do
       expect(Cask::CaskLoader.load("with-depends-on-macos-bare").supports_linux?).to be false
       expect(Cask::CaskLoader.load("with-depends-on-maximum-macos").supports_linux?).to be false
       expect(Cask::CaskLoader.load("with-depends-on-macos-in-on-macos").supports_linux?).to be true
       expect(Cask::CaskLoader.load("with-depends-on-linux-bare").supports_linux?).to be true
 
-      macos_artifact_cask = described_class.new("scoped-macos-dependency-with-app") do
-        version "1.0"
-        sha256 "bbbb"
-
-        url "https://brew.sh/test.zip"
-        homepage "https://brew.sh"
-
-        on_macos do
-          depends_on macos: :catalina
-        end
-
-        app "Test.app"
-      end
-
-      expect(macos_artifact_cask.supports_linux?).to be false
-    end
-
-    it "reflects whether the cask has only platform-agnostic artifacts" do
       expect(Cask::CaskLoader.load("with-non-executable-binary").supports_linux?).to be true
-      expect(Cask::CaskLoader.load("basic-cask").supports_linux?).to be false
-      expect(Cask::CaskLoader.load("with-installer-manual").supports_linux?).to be false
-
-      arch_only_cask = described_class.new("arch-only-binary") do
-        version "1.0"
-        sha256 arm: "aaaa", intel: "bbbb"
-
-        url "https://brew.sh/test-#{version}.tar.gz"
-        name "Arch Only Binary"
-        desc "Cask with arch-only sha256 and a binary artifact"
-        homepage "https://brew.sh"
-
-        binary "some-tool"
-      end
-
-      expect(arch_only_cask.supports_linux?).to be true
+      expect(Cask::CaskLoader.load("basic-cask").supports_linux?).to be true
+      expect(Cask::CaskLoader.load("with-installer-manual").supports_linux?).to be true
     end
   end
 
@@ -631,8 +582,24 @@ RSpec.describe Cask::Cask, :cask do
     end
   end
 
+  describe "#outdated_info" do
+    it "includes pinned cask details" do
+      cask = Cask::CaskLoader.load("local-caffeine")
+      allow(cask).to receive_messages(outdated_version: "1.2.2", pinned?: true, pinned_version: "1.2.2")
+
+      expect(cask.outdated_info(false, true, false, false, false))
+        .to eq("local-caffeine (1.2.2) != 1.2.3 [pinned at 1.2.2]")
+      expect(cask.outdated_info(false, false, true, false, false)).to include(
+        pinned:         true,
+        pinned_version: "1.2.2",
+      )
+    end
+  end
+
   describe "#to_h" do
-    let(:expected_json) { (TEST_FIXTURE_DIR/"cask/everything.json").read.strip }
+    let(:expected_json) do
+      (TEST_FIXTURE_DIR/"cask/everything.json").read.strip.gsub("$APPDIR", "#{TEST_TMPDIR}/cask-appdir")
+    end
 
     context "when loaded from cask file" do
       it "returns expected hash" do
@@ -659,6 +626,20 @@ RSpec.describe Cask::Cask, :cask do
         expect(hash).to be_a(Hash)
         expect(JSON.pretty_generate(hash)).to eq(expected_json)
       end
+    end
+  end
+
+  describe "#refresh_for_tag" do
+    let(:cask) { Cask::CaskLoader.load("on-linux-asymmetric") }
+
+    it "yields with the cask refreshed for a supported tag" do
+      tag = Utils::Bottles::Tag.new(system: :sonoma, arch: :intel)
+      expect(cask.refresh_for_tag(tag) { cask.url.to_s }).to include("caffeine-intel-darwin")
+    end
+
+    it "returns nil for a tag the cask does not support" do
+      tag = Utils::Bottles::Tag.new(system: :linux, arch: :arm)
+      expect(cask.refresh_for_tag(tag) { cask.url }).to be_nil
     end
   end
 
@@ -810,15 +791,23 @@ RSpec.describe Cask::Cask, :cask do
       expect(JSON.pretty_generate(h["variations"])).to eq expected_sha256_variations_os.strip
     end
 
+    it "omits tags a cask intentionally doesn't define in on_system blocks" do
+      c = Cask::CaskLoader.load("on-linux-asymmetric")
+      h = c.to_hash_with_variations
+
+      expect(h["variations"]).to include(:x86_64_linux)
+      expect(h["variations"]).not_to include(:arm64_linux)
+    end
+
     # NOTE: The calls to `Cask.generating_hash!` and `Cask.generated_hash!`
     #       are not idempotent so they can only be used in one test.
     it "returns the correct hash placeholders" do
-      described_class.generating_hash!
-      expect(described_class).to be_generating_hash
+      klass.generating_hash!
+      expect(klass).to be_generating_hash
       c = Cask::CaskLoader.load("placeholders")
       h = c.to_hash_with_variations
-      described_class.generated_hash!
-      expect(described_class).not_to be_generating_hash
+      klass.generated_hash!
+      expect(klass).not_to be_generating_hash
 
       expect(h).to be_a(Hash)
       expect(h["artifacts"].first[:binary].first).to eq "$APPDIR/some/path"
@@ -826,7 +815,10 @@ RSpec.describe Cask::Cask, :cask do
     end
 
     context "when loaded from json file" do
-      let(:expected_json) { (TEST_FIXTURE_DIR/"cask/everything-with-variations.json").read.strip }
+      let(:expected_json) do
+        (TEST_FIXTURE_DIR/"cask/everything-with-variations.json").read.strip
+          .gsub("$APPDIR", "#{TEST_TMPDIR}/cask-appdir")
+      end
 
       it "returns expected hash with variations" do
         expect(Homebrew::API::Cask).not_to receive(:source_download)

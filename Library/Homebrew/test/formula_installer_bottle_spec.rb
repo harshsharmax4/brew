@@ -11,6 +11,8 @@ require "test/support/fixtures/testball_bottle"
 require "test/support/fixtures/testball_bottle_cellar"
 
 RSpec.describe FormulaInstaller do
+  let(:klass) { FormulaInstaller }
+
   alias_matcher :pour_bottle, :be_pour_bottle
 
   matcher :be_poured_from_bottle do
@@ -102,7 +104,7 @@ RSpec.describe FormulaInstaller do
     expect(formula).not_to be_bottled
 
     expect do
-      described_class.new(formula).install
+      klass.new(formula).install
     end.to raise_error(UnbottledError)
 
     expect(formula).not_to be_latest_version_installed

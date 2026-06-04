@@ -411,7 +411,7 @@ class Keg
   end
 
   sig {
-    params(file: Pathname, string: String, ignores: T::Array[Regexp], linked_libraries: T::Array[Pathname],
+    params(file: Pathname, string: String, ignores: T::Array[Regexp], linked_libraries: T::Array[String],
            formula_and_runtime_deps_names: T.nilable(T::Array[String])).returns(T::Array[[String, String]])
   }
   def self.text_matches_in_file(file, string, ignores, linked_libraries, formula_and_runtime_deps_names)
@@ -454,7 +454,7 @@ class Keg
     text_matches
   end
 
-  sig { params(_file: Pathname, _string: String).returns(T::Array[Pathname]) }
+  sig { params(_file: Pathname, _string: String).returns(T::Array[String]) }
   def self.file_linked_libraries(_file, _string)
     []
   end

@@ -152,7 +152,10 @@ module Homebrew
             puts
           end
 
-          next if !take_root_ownership?(service) && System.root?
+          # Never skip loading when ownership was taken, otherwise
+          # only skip a `--sudo-service-user` service when not root.
+          root_ownership_taken = take_root_ownership?(service)
+          next if !root_ownership_taken && sudo_service_user && !System.root?
 
           service_load(service, nil, enable: true)
         end
@@ -372,7 +375,7 @@ module Homebrew
 
       sig { params(service: Services::FormulaWrapper, file: T.nilable(Pathname), enable: T::Boolean).void }
       def self.service_load(service, file, enable:)
-        if System.root? && !service.service_startup?
+        if System.root? && !service.service_startup? && !sudo_service_user
           opoo "#{service.name} must be run as non-root to start at user login!"
         elsif !System.root? && service.service_startup?
           opoo "#{service.name} must be run as root to start at system startup!"
@@ -380,11 +383,13 @@ module Homebrew
 
         if System.launchctl?
           file ||= enable ? service.dest : service.service_file
+          service.path_dirs.each(&:mkpath)
           launchctl_load(service, file:, enable:)
         elsif System.systemctl?
           # Systemctl loads based upon location so only install service
           # file when it is not installed. Used with the `run` command.
           install_service_file(service, file) unless service.dest.exist?
+          service.path_dirs.each(&:mkpath)
           systemd_load(service, enable:)
         end
 
@@ -407,7 +412,7 @@ module Homebrew
 
           if sudo_service_user && System.launchctl?
             # set the username in the new plist file
-            ohai "Setting username in #{service.service_name} to: #{System.user}"
+            ohai "Setting username in #{service.service_name} to: #{sudo_service_user}"
             plist_data = Plist.parse_xml(contents, marshal: false)
             plist_data["UserName"] = sudo_service_user
             plist_data.to_plist

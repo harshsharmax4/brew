@@ -1,4 +1,4 @@
-# typed: false
+# typed: strict
 # frozen_string_literal: true
 
 require "cmd/shared_examples/args_parse"
@@ -18,5 +18,9 @@ RSpec.describe Homebrew::DevCmd::TapNew do
 
     expect(HOMEBREW_LIBRARY/"Taps/homebrew/homebrew-foo/README.md").to exist
     expect(HOMEBREW_LIBRARY/"Taps/homebrew/homebrew-foo/.github/workflows/tests.yml").to exist
+    expect((HOMEBREW_LIBRARY/"Taps/homebrew/homebrew-foo/.github/workflows/tests.yml").read)
+      .not_to include("HOMEBREW_DEVELOPER")
+    expect((HOMEBREW_LIBRARY/"Taps/homebrew/homebrew-foo/.github/workflows/publish.yml").read)
+      .not_to include("HOMEBREW_DEVELOPER")
   end
 end

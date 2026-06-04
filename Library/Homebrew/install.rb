@@ -7,7 +7,9 @@ require "hardware"
 require "development_tools"
 require "upgrade"
 require "download_queue"
+require "ask"
 require "utils/output"
+require "utils/topological_hash"
 
 module Homebrew
   # Helper module for performing (pre-)install checks.
@@ -146,7 +148,7 @@ module Homebrew
           elsif only_dependencies
             return true
           elsif !quiet
-            opoo <<~EOS
+            opoo_without_github_actions_annotation <<~EOS
               #{formula.full_name} #{formula.pkg_version} is already installed and up-to-date.
               To reinstall #{formula.pkg_version}, run:
                 brew reinstall #{formula.name}
@@ -184,15 +186,14 @@ module Homebrew
                 brew link #{formula.full_name}
             EOS
           else
-            msg = if quiet
-              nil
-            else
-              <<~EOS
+            unless quiet
+              opoo_without_github_actions_annotation <<~EOS
                 #{msg} and up-to-date.
                 To reinstall #{formula.pkg_version}, run:
                   brew reinstall #{formula.name}
               EOS
             end
+            msg = nil
           end
           opoo msg if msg
         elsif !formula.any_version_installed? && (old_formula = formula.old_installed_formulae.first)
@@ -401,9 +402,17 @@ module Homebrew
         oh1 "Fetching downloads for: #{combined_fetch_targets.to_sentence}", truncate: false
       end
 
-      sig { params(cask_installers: T::Array[T.untyped]).void }
-      def enqueue_cask_installers(cask_installers)
-        cask_installers.each(&:prelude)
+      sig { params(cask_installers: T::Array[T.untyped], download_queue: Homebrew::DownloadQueue).void }
+      def enqueue_cask_installers(cask_installers, download_queue:)
+        if cask_installers.any?(&:source_download_requires_pre_fetch?)
+          source_downloads = cask_installers.filter_map(&:prelude_fetch_download)
+          if source_downloads.any?
+            oh1 "Downloading Cask files"
+            source_downloads.each { |source_download| download_queue.enqueue(source_download) }
+            download_queue.fetch
+          end
+        end
+
         cask_installers.each(&:enqueue_downloads)
       end
 
@@ -415,7 +424,7 @@ module Homebrew
                cc: T.nilable(String), git: T::Boolean, interactive: T::Boolean, keep_tmp: T::Boolean,
                debug_symbols: T::Boolean, force: T::Boolean, overwrite: T::Boolean, debug: T::Boolean,
                quiet: T::Boolean, verbose: T::Boolean, dry_run: T::Boolean,
-               skip_post_install: T::Boolean, skip_link: T::Boolean).void
+               dry_run_action: String, skip_post_install: T::Boolean, skip_link: T::Boolean).void
       }
       def install_formulae(
         formula_installers,
@@ -438,6 +447,7 @@ module Homebrew
         quiet: false,
         verbose: false,
         dry_run: false,
+        dry_run_action: "install",
         skip_post_install: false,
         skip_link: false
       )
@@ -445,7 +455,8 @@ module Homebrew
         return if formulae_names_to_install.empty?
 
         if dry_run
-          ohai "Would install #{Utils.pluralize("formula", formulae_names_to_install.count, include_count: true)}:"
+          ohai "Would #{dry_run_action} #{Utils.pluralize("formula", formulae_names_to_install.count,
+                                                          include_count: true)}:"
           puts formulae_names_to_install.join(" ")
 
           formula_installers.each do |fi|
@@ -464,50 +475,180 @@ module Homebrew
 
       sig {
         params(
-          formula:      Formula,
-          dependencies: T::Array[Dependency],
-          _block:       T.proc.params(arg0: Formula).returns(String),
+          formula:            Formula,
+          dependencies:       T::Array[Dependency],
+          skip_formula_names: T::Array[String],
+          _block:             T.proc.params(arg0: Formula).returns(String),
         ).void
       }
-      def print_dry_run_dependencies(formula, dependencies, &_block)
+      def print_dry_run_dependencies(formula, dependencies, skip_formula_names: [], &_block)
         return if dependencies.empty?
 
-        ohai "Would install #{Utils.pluralize("dependency", dependencies.count, include_count: true)} " \
+        formula_names = dependencies.filter_map do |dep|
+          dependency = dep.to_formula
+          next if skip_formula_names.include?(dependency.full_name)
+
+          yield dependency
+        end
+        return if formula_names.empty?
+
+        ohai "Would install #{Utils.pluralize("dependency", formula_names.count, include_count: true)} " \
              "for #{formula.name}:"
-        formula_names = dependencies.map { |dep| yield dep.to_formula }
-        puts formula_names.join(" ")
+        puts formula_names.join("\n")
       end
 
-      # If asking the user is enabled, show dependency and size information.
-      sig { params(formulae_installer: T::Array[FormulaInstaller], dependants: Homebrew::Upgrade::Dependents, args: Homebrew::CLI::Args).void }
-      def ask_formulae(formulae_installer, dependants, args:)
+      # If asking the user is enabled, show dry-run information.
+      sig {
+        params(
+          formulae_installer:         T::Array[FormulaInstaller],
+          dependants:                 Homebrew::Upgrade::Dependents,
+          flags:                      T::Array[String],
+          force_bottle:               T::Boolean,
+          build_from_source_formulae: T::Array[String],
+          interactive:                T::Boolean,
+          keep_tmp:                   T::Boolean,
+          debug_symbols:              T::Boolean,
+          force:                      T::Boolean,
+          debug:                      T::Boolean,
+          quiet:                      T::Boolean,
+          verbose:                    T::Boolean,
+          prompt:                     T::Boolean,
+          action:                     String,
+        ).void
+      }
+      def ask_formulae(formulae_installer, dependants,
+                       flags: [],
+                       force_bottle: false,
+                       build_from_source_formulae: [],
+                       interactive: false,
+                       keep_tmp: false,
+                       debug_symbols: false,
+                       force: false,
+                       debug: false,
+                       quiet: false,
+                       verbose: false,
+                       prompt: true,
+                       action: "installation")
         return if formulae_installer.empty?
 
-        formulae = collect_dependencies(formulae_installer, dependants)
+        formula_names = formulae_installer.map { |formula_installer| formula_installer.formula.full_name }
 
-        ohai "Looking for bottles..."
+        install_formulae(formulae_installer, dry_run: true, dry_run_action: dry_run_action(action))
 
-        sizes = compute_total_sizes(formulae, debug: args.debug?)
+        Upgrade.upgrade_dependents(
+          Homebrew::Upgrade::Dependents.new(
+            upgradeable: dependants.upgradeable.dup,
+            pinned:      dependants.pinned.dup,
+            skipped:     dependants.skipped.dup,
+          ),
+          formulae_installer.map(&:formula),
+          flags:,
+          dry_run:                    true,
+          force_bottle:,
+          build_from_source_formulae:,
+          interactive:,
+          keep_tmp:,
+          debug_symbols:,
+          force:,
+          debug:,
+          quiet:,
+          verbose:,
+        )
 
-        puts "#{::Utils.pluralize("Formula", formulae.count)} \
-(#{formulae.count}): #{formulae.join(", ")}\n\n"
-        puts "Download Size: #{Formatter.disk_usage_readable(sizes.fetch(:download))}"
-        puts "Install Size:  #{Formatter.disk_usage_readable(sizes.fetch(:installed))}"
-        if (net_install_size = sizes[:net]) && net_install_size != 0
-          puts "Net Install Size: #{Formatter.disk_usage_readable(net_install_size)}"
-        end
-
-        ask_input
+        ask_input(action:) if prompt && ask_prompt_needed?(
+          planned_names:   formula_names,
+          requested_names: formula_names,
+          force:           formulae_ask_prompt_needed?(formulae_installer, dependants),
+        )
       end
 
-      sig { params(casks: T::Array[Cask::Cask]).void }
-      def ask_casks(casks)
+      sig {
+        params(
+          casks:          T::Array[Cask::Cask],
+          action:         String,
+          prompt:         T::Boolean,
+          skip_cask_deps: T::Boolean,
+        ).void
+      }
+      def ask_casks(casks, action: "installation", prompt: true, skip_cask_deps: false)
         return if casks.empty?
 
-        puts "#{::Utils.pluralize("Cask", casks.count, plural: "s")} \
-(#{casks.count}): #{casks.join(", ")}\n\n"
+        cask_names = casks.map(&:full_name)
+        dependency_names = print_dry_run_casks(casks, action: dry_run_action(action), skip_cask_deps:)
 
-        ask_input
+        ask_input(action:) if prompt && ask_prompt_needed?(
+          planned_names:   cask_names + dependency_names,
+          requested_names: cask_names,
+        )
+      end
+
+      sig {
+        params(
+          casks:             T::Array[Cask::Cask],
+          action:            String,
+          skip_cask_deps:    T::Boolean,
+          include_installed: T::Boolean,
+        ).returns(T::Array[String])
+      }
+      def print_dry_run_casks(casks, action: "install", skip_cask_deps: false, include_installed: true)
+        if (casks_to_print = (include_installed ? casks : casks.reject(&:installed?)).presence)
+          ohai "Would #{action} #{::Utils.pluralize("cask", casks_to_print.count, include_count: true)}:"
+          puts casks_to_print.map(&:full_name).join(" ")
+        end
+
+        casks.flat_map do |cask|
+          dep_names = T.let([], T::Array[String])
+          unless skip_cask_deps
+            dep_names.concat(
+              ::Utils::TopologicalHash.graph_package_dependencies([cask]).tsort.grep(Cask::Cask).filter_map do |dep|
+                next if dep.full_name == cask.full_name
+                next if dep.installed?
+
+                dep.full_name
+              end,
+            )
+          end
+          dep_names.concat(
+            CaskDependent.new(cask)
+                         .runtime_dependencies(read_from_tab: false, undeclared: false)
+                         .reject(&:installed?)
+                         .map(&:name),
+          )
+          dep_names.uniq!
+          next [] if dep_names.blank?
+
+          ohai "Would install #{::Utils.pluralize("dependency", dep_names.count, include_count: true)} " \
+               "for #{cask.full_name}:"
+          puts dep_names.join(" ")
+          dep_names
+        end
+      end
+
+      sig {
+        params(
+          planned_names:   T::Array[String],
+          requested_names: T::Array[String],
+          force:           T::Boolean,
+          named:           T::Boolean,
+        ).returns(T::Boolean)
+      }
+      def ask_prompt_needed?(planned_names:, requested_names:, force: false, named: true)
+        return false if planned_names.empty?
+        return true if force
+        return true unless named
+
+        planned_names.any? { |planned_name| requested_names.exclude?(planned_name) }
+      end
+
+      sig {
+        params(
+          formulae_installer: T::Array[FormulaInstaller],
+          dependants:         Homebrew::Upgrade::Dependents,
+        ).returns(T::Boolean)
+      }
+      def formulae_ask_prompt_needed?(formulae_installer, dependants)
+        formulae_installer.any? { |formula_installer| formula_installer.compute_dependencies.present? } ||
+          dependants.upgradeable.present?
       end
 
       sig { params(formula_installer: FormulaInstaller, upgrade: T::Boolean).void }
@@ -545,7 +686,24 @@ module Homebrew
         end
       end
 
+      sig { params(action: String).void }
+      def ask(action: "installation")
+        ask_input(action:)
+      end
+
       private
+
+      sig { params(action: String).returns(String) }
+      def dry_run_action(action)
+        case action
+        when "reinstallation"
+          "reinstall"
+        when "upgrade"
+          "upgrade"
+        else
+          "install"
+        end
+      end
 
       sig { params(formula: Formula).returns(T::Array[Keg]) }
       def outdated_kegs(formula)
@@ -560,6 +718,7 @@ module Homebrew
         check_cpu
         attempt_directory_creation
         Diagnostic.checks(:supported_configuration_checks, fatal: all_fatal)
+        Diagnostic.checks(:preinstall_checks, fatal: false)
         Diagnostic.checks(:fatal_preinstall_checks)
       end
 
@@ -583,32 +742,17 @@ module Homebrew
         EOS
       end
 
-      sig { void }
-      def ask_input
-        ohai "Do you want to proceed with the installation? [Y/y/yes/N/n/no]"
-        accepted_inputs = %w[y yes]
-        declined_inputs = %w[n no]
-        loop do
-          result = $stdin.gets
-          return unless result
-
-          result = result.chomp.strip.downcase
-          if accepted_inputs.include?(result)
-            break
-          elsif declined_inputs.include?(result)
-            exit 1
-          else
-            puts "Invalid input. Please enter 'Y', 'y', or 'yes' to proceed, or 'N' to abort."
-          end
-        end
+      sig { params(action: String).void }
+      def ask_input(action: "installation")
+        Homebrew::Ask.confirm?(action:)
+        nil
       end
 
-      # Compute the total sizes (download, installed, and net) for the given formulae.
+      # Compute the total sizes (download and installed) for the given formulae.
       sig { params(sized_formulae: T::Array[Formula], debug: T::Boolean).returns(T::Hash[Symbol, Integer]) }
       def compute_total_sizes(sized_formulae, debug: false)
         total_download_size  = 0
         total_installed_size = 0
-        total_net_size       = 0
 
         sized_formulae.each do |formula|
           bottle = formula.bottle
@@ -619,17 +763,10 @@ module Homebrew
 
           total_download_size  += bottle.bottle_size.to_i if bottle.bottle_size
           total_installed_size += bottle.installed_size.to_i if bottle.installed_size
-
-          # Sum disk usage for all installed kegs of the formula.
-          next if formula.installed_kegs.none?
-
-          kegs_dep_size = formula.installed_kegs.sum { |keg| keg.disk_usage.to_i }
-          total_net_size += bottle.installed_size.to_i - kegs_dep_size if bottle.installed_size
         end
 
         { download:  total_download_size,
-          installed: total_installed_size,
-          net:       total_net_size }
+          installed: total_installed_size }
       end
 
       sig {

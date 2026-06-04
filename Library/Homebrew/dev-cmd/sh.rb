@@ -4,7 +4,7 @@
 require "abstract_command"
 require "extend/ENV"
 require "formula"
-require "utils/gems"
+require "utils/gem_setup"
 require "utils/shell"
 
 module Homebrew

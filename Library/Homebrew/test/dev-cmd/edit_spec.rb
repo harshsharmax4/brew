@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "cmd/shared_examples/args_parse"
 require "dev-cmd/edit"
 
 RSpec.describe Homebrew::DevCmd::Edit do
+  let(:klass) { Homebrew::DevCmd::Edit }
+
   it_behaves_like "parseable arguments"
 
   it "opens a given Formula in an editor", :integration_test do
@@ -42,8 +44,8 @@ RSpec.describe Homebrew::DevCmd::Edit do
       RUBY
     end
 
-    allow_any_instance_of(described_class).to receive(:exec_editor)
+    allow_any_instance_of(klass).to receive(:exec_editor)
 
-    described_class.new(["testball"]).run
+    klass.new(["testball"]).run
   end
 end

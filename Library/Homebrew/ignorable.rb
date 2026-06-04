@@ -22,16 +22,13 @@ module Ignorable
 
   sig { params(blk: T.nilable(T.proc.void)).void }
   def self.hook_raise(&blk)
-    # TODO: migrate away from this inline class here, they don't play nicely with
-    #       Sorbet, when we migrate to `typed: strict`
-    # rubocop:todo Sorbet/BlockMethodDefinition
     Object.class_eval do
       alias_method :original_raise, :raise
 
-      sig { params(args: T.anything).void }
-      def raise(*args)
+      # `define_method` keeps Sorbet happy inside this `class_eval` block.
+      define_method(:raise) do |*args|
         callcc do |continuation|
-          super
+          super(*args)
         # Handle all possible exceptions.
         rescue Exception => e # rubocop:disable Lint/RescueException
           unless e.is_a?(ScriptError)
@@ -44,7 +41,6 @@ module Ignorable
 
       alias_method :fail, :raise
     end
-    # rubocop:enable Sorbet/BlockMethodDefinition
 
     return unless block_given?
 

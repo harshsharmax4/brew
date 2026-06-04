@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "bundle"
@@ -6,7 +6,9 @@ require "bundle/skipper"
 require "bundle/dsl"
 
 RSpec.describe Homebrew::Bundle::Skipper do
-  subject(:skipper) { described_class }
+  subject(:skipper) { klass }
+
+  let(:klass) { Homebrew::Bundle::Skipper }
 
   before do
     allow(ENV).to receive(:[]).and_return(nil)
@@ -62,10 +64,42 @@ RSpec.describe Homebrew::Bundle::Skipper do
       end
     end
 
+    context "with a WinGet entry", :needs_macos do
+      let(:entry) { Homebrew::Bundle::Dsl::Entry.new(:winget, "Valve.Steam") }
+
+      it "skips on macOS with warning" do
+        expect($stdout).to receive(:puts).with(
+          Formatter.warning("Skipping winget Valve.Steam (requires WSL)"),
+        )
+        expect(skipper.skip?(entry)).to be true
+      end
+    end
+
     context "with a flatpak entry on Linux", :needs_linux do
       let(:entry) { Homebrew::Bundle::Dsl::Entry.new(:flatpak, "org.gnome.Calculator") }
 
       it "does not skip" do
+        expect(skipper.skip?(entry)).to be false
+      end
+    end
+
+    context "with a WinGet entry on Linux outside WSL", :needs_linux do
+      let(:entry) { Homebrew::Bundle::Dsl::Entry.new(:winget, "App Installer") }
+
+      it "skips with warning" do
+        allow(OS).to receive(:wsl?).and_return(false)
+        expect($stdout).to receive(:puts).with(
+          Formatter.warning("Skipping winget App Installer (requires WSL)"),
+        )
+        expect(skipper.skip?(entry)).to be true
+      end
+    end
+
+    context "with a WinGet entry on WSL", :needs_linux do
+      let(:entry) { Homebrew::Bundle::Dsl::Entry.new(:winget, "App Installer") }
+
+      it "does not skip" do
+        allow(OS).to receive(:wsl?).and_return(true)
         expect(skipper.skip?(entry)).to be false
       end
     end

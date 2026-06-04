@@ -1,12 +1,13 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "lock_file"
 
 RSpec.describe LockFile do
-  subject(:lock_file) { described_class.new(:lock, Pathname("foo")) }
+  subject(:lock_file) { klass.new(:lock, Pathname("foo")) }
 
-  let(:lock_file_copy) { described_class.new(:lock, Pathname("foo")) }
+  let(:klass) { LockFile }
+  let(:lock_file_copy) { klass.new(:lock, Pathname("foo")) }
 
   describe "#lock" do
     it "ensures the lock file is created" do

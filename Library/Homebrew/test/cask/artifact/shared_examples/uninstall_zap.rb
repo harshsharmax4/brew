@@ -266,18 +266,6 @@ RSpec.shared_examples "#uninstall_phase or #zap_phase" do
       end.to output(/Application 'my.fancy.package.app' quit successfully\./).to_stdout
     end
 
-    it "does not attempt to quit when upgrading or reinstalling" do
-      next if artifact_dsl_key == :zap
-
-      allow(User.current).to receive(:gui?).and_return true
-
-      expect(subject).not_to receive(:running?)
-      expect(subject).not_to receive(:quit)
-
-      subject.public_send(:"#{artifact_dsl_key}_phase", upgrade: true, command: fake_system_command)
-      subject.public_send(:"#{artifact_dsl_key}_phase", reinstall: true, command: fake_system_command)
-    end
-
     it "tries to quit the application" do
       allow(User.current).to receive(:gui?).and_return true
 
@@ -302,6 +290,7 @@ RSpec.shared_examples "#uninstall_phase or #zap_phase" do
     it "is supported" do
       allow(subject).to receive(:running_processes).with(bundle_id)
                                                    .and_return(unix_pids.map { |pid| [pid, 0, bundle_id] })
+      allow(subject).to receive(:sleep).with(3)
 
       signals.each do |signal|
         expect(Process).to receive(:kill).with(signal, *unix_pids).and_return(1)

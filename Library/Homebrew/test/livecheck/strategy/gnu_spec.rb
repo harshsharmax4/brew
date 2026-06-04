@@ -4,8 +4,9 @@
 require "livecheck/strategy"
 
 RSpec.describe Homebrew::Livecheck::Strategy::Gnu do
-  subject(:gnu) { described_class }
+  subject(:gnu) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Strategy::Gnu }
   let(:gnu_urls) do
     {
       no_version_dir: "https://ftpmirror.gnu.org/gnu/abc/abc-1.2.3.tar.gz",
@@ -15,7 +16,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Gnu do
     }
   end
   let(:non_gnu_url) { "https://brew.sh/test" }
-
   let(:generated) do
     {
       no_version_dir: {
@@ -33,7 +33,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Gnu do
       savannah:       {},
     }
   end
-
   # The whitespace in a real response is a bit looser and this has been
   # reformatted for the sake of brevity.
   let(:content) do
@@ -101,7 +100,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Gnu do
 
     EOS
   end
-
   let(:matches) { ["1.2.2", "1.2.3"] }
 
   describe "::match?" do

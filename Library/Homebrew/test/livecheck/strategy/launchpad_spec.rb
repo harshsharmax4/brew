@@ -1,11 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "livecheck/strategy"
 
 RSpec.describe Homebrew::Livecheck::Strategy::Launchpad do
-  subject(:launchpad) { described_class }
+  subject(:launchpad) { klass }
 
+  let(:klass) { Homebrew::Livecheck::Strategy::Launchpad }
   let(:launchpad_urls) do
     {
       version_dir:    "https://launchpad.net/abc/1.2/1.2.3/+download/abc-1.2.3.tar.gz",
@@ -14,13 +15,11 @@ RSpec.describe Homebrew::Livecheck::Strategy::Launchpad do
     }
   end
   let(:non_launchpad_url) { "https://brew.sh/test" }
-
   let(:generated) do
     {
       url: "https://launchpad.net/abc/",
     }
   end
-
   # The whitespace in a real response is a bit looser and this has been
   # reformatted for the sake of brevity.
   let(:content) do
@@ -54,7 +53,6 @@ RSpec.describe Homebrew::Livecheck::Strategy::Launchpad do
       </html>
     EOS
   end
-
   let(:matches) { ["1.2.3"] }
 
   describe "::match?" do
@@ -85,7 +83,7 @@ RSpec.describe Homebrew::Livecheck::Strategy::Launchpad do
     let(:match_data) do
       cached = {
         matches: matches.to_h { |v| [v, Version.new(v)] },
-        regex:   launchpad::DEFAULT_REGEX,
+        regex:   Homebrew::Livecheck::Strategy::Launchpad::DEFAULT_REGEX,
         url:     generated[:url],
         cached:  true,
       }

@@ -27,6 +27,7 @@ module Homebrew
                             "Useful for repairing bottle uploads that previously failed."
         switch "--upload-only",
                description: "Skip running `brew bottle` before uploading."
+        # odeprecated: replace with `HOMEBREW_GIT_COMMITTER_NAME` and `HOMEBREW_GIT_COMMITTER_EMAIL`.
         flag   "--committer=",
                description: "Specify a committer name and email in `git`'s standard author format."
         flag   "--root-url=",
@@ -50,12 +51,17 @@ module Homebrew
         bottles_hash = bottles_hash_from_json_files(json_files, args)
 
         unless args.upload_only?
+          if (committer = args.committer)
+            committer = Utils.parse_author!(committer)
+            ENV["GIT_COMMITTER_NAME"] = committer[:name]
+            ENV["GIT_COMMITTER_EMAIL"] = committer[:email]
+          end
+
           bottle_args = ["bottle", "--merge", "--write"]
           bottle_args << "--verbose" if args.verbose?
           bottle_args << "--debug" if args.debug?
           bottle_args << "--keep-old" if args.keep_old?
           bottle_args << "--root-url=#{args.root_url}" if args.root_url
-          bottle_args << "--committer=#{args.committer}" if args.committer
           bottle_args << "--no-commit" if args.no_commit?
           bottle_args << "--root-url-using=#{args.root_url_using}" if args.root_url_using
           bottle_args += json_files

@@ -2,23 +2,25 @@
 # frozen_string_literal: true
 
 RSpec.describe Cask::Quarantine do
+  let(:klass) { Cask::Quarantine }
+
   describe ".user_approved?" do
     let(:file) { Pathname("/tmp/Test.app") }
 
     before do
-      allow(described_class).to receive(:xattr).and_return(Pathname("/usr/bin/xattr"))
+      allow(klass).to receive(:xattr).and_return(Pathname("/usr/bin/xattr"))
     end
 
     it "returns true when the user approval flag is set" do
-      allow(described_class).to receive(:status).with(file).and_return("01c3;6723b9fa;Safari;event-id")
+      allow(klass).to receive(:status).with(file).and_return("01c3;6723b9fa;Safari;event-id")
 
-      expect(described_class.user_approved?(file)).to be(true)
+      expect(klass.user_approved?(file)).to be(true)
     end
 
     it "returns false when the user approval flag is not set" do
-      allow(described_class).to receive(:status).with(file).and_return("0183;6723b9fa;Safari;event-id")
+      allow(klass).to receive(:status).with(file).and_return("0183;6723b9fa;Safari;event-id")
 
-      expect(described_class.user_approved?(file)).to be(false)
+      expect(klass.user_approved?(file)).to be(false)
     end
   end
 
@@ -35,21 +37,21 @@ RSpec.describe Cask::Quarantine do
           Authority=Developer ID Application: Brew Test (ABCDE12345)
         EOS
       )
-      allow(described_class).to receive(:system_command).with("codesign", args: ["-dvvv", file], print_stderr: false)
-                                                        .and_return(result)
+      allow(klass).to receive(:system_command).with("codesign", args: ["-dvvv", file], print_stderr: false)
+                                              .and_return(result)
 
-      identity = described_class.signing_identity(file)
+      identity = klass.signing_identity(file)
 
       expect(identity).to have_attributes(identifier: "sh.brew.test-app", team_identifier: "ABCDE12345")
     end
 
     it "returns the signed identifier when the Team ID is missing" do
       result = instance_double(SystemCommand::Result, success?: true, merged_output: "Identifier=sh.brew.test-app\n")
-      allow(described_class).to receive(:system_command).with("codesign", args: ["-dvvv", file], print_stderr: false)
-                                                        .and_return(result)
+      allow(klass).to receive(:system_command).with("codesign", args: ["-dvvv", file], print_stderr: false)
+                                              .and_return(result)
 
-      expect(described_class.signing_identity(file)).to have_attributes(identifier:      "sh.brew.test-app",
-                                                                        team_identifier: nil)
+      expect(klass.signing_identity(file)).to have_attributes(identifier:      "sh.brew.test-app",
+                                                              team_identifier: nil)
     end
 
     it 'returns nil for the Team ID when it is "not set"' do
@@ -59,11 +61,11 @@ RSpec.describe Cask::Quarantine do
         merged_output: "Identifier=com.apple.calculator\n" \
                        "TeamIdentifier=not set\n",
       )
-      allow(described_class).to receive(:system_command).with("codesign", args: ["-dvvv", file], print_stderr: false)
-                                                        .and_return(result)
+      allow(klass).to receive(:system_command).with("codesign", args: ["-dvvv", file], print_stderr: false)
+                                              .and_return(result)
 
-      expect(described_class.signing_identity(file)).to have_attributes(identifier:      "com.apple.calculator",
-                                                                        team_identifier: nil)
+      expect(klass.signing_identity(file)).to have_attributes(identifier:      "com.apple.calculator",
+                                                              team_identifier: nil)
     end
   end
 end

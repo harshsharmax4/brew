@@ -5,7 +5,7 @@
 # shellcheck disable=SC2154
 export HOMEBREW_REQUIRED_RUBY_VERSION="4.0"
 HOMEBREW_PORTABLE_RUBY_VERSION="$(cat "${HOMEBREW_LIBRARY}/Homebrew/vendor/portable-ruby-version")"
-export HOMEBREW_BUNDLER_VERSION="4.0.6"
+export HOMEBREW_BUNDLER_VERSION="4.0.10"
 
 # Disable Ruby options we don't need.
 export HOMEBREW_RUBY_DISABLE_OPTIONS="--disable=gems,rubyopt"
@@ -127,7 +127,7 @@ If there's no Homebrew Portable Ruby available for your processor:
   fi
 
   # Needed for `brew` and `odie`.
-  source "${HOMEBREW_LIBRARY}/Homebrew/utils/helpers.sh"
+  source "${HOMEBREW_LIBRARY}/Homebrew/utils.sh"
 
   if [[ -x "${vendor_ruby_path}" ]]
   then

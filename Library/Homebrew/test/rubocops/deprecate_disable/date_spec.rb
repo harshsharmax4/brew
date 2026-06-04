@@ -1,10 +1,12 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "rubocops/deprecate_disable"
 
 RSpec.describe RuboCop::Cop::FormulaAudit::DeprecateDisableDate do
-  subject(:cop) { described_class.new }
+  subject(:cop) { klass.new }
+
+  let(:klass) { RuboCop::Cop::FormulaAudit::DeprecateDisableDate }
 
   context "when auditing `deprecate!`" do
     it "reports and corrects an offense if `date` is not ISO 8601 compliant" do
